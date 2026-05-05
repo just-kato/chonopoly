@@ -1,0 +1,113 @@
+"use server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+
+export type UserRow = {
+  id: string;
+  email: string;
+  username: string | null;
+  display_name: string | null;
+  role: "admin" | "user";
+  created_at: string;
+};
+
+function serviceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+async function assertAdmin() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (data?.role !== "admin") throw new Error("Not authorized.");
+  return user;
+}
+
+export async function listUsers(): Promise<UserRow[]> {
+  const caller = await assertAdmin();
+  const admin = serviceClient();
+
+  const [{ data: authData }, { data: profiles }] = await Promise.all([
+    admin.auth.admin.listUsers({ perPage: 1000 }),
+    admin.from("profiles").select("id, username, display_name, role"),
+  ]);
+
+  const profileMap = new Map(
+    (profiles ?? []).map((p) => [p.id, p])
+  );
+
+  return (authData?.users ?? [])
+    .filter((u) => u.id !== caller.id)
+    .map((u) => ({
+      id: u.id,
+      email: u.email ?? "",
+      username: profileMap.get(u.id)?.username ?? null,
+      display_name: profileMap.get(u.id)?.display_name ?? null,
+      role: (profileMap.get(u.id)?.role ?? "user") as "admin" | "user",
+      created_at: u.created_at,
+    }))
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+export async function updateUserRole(
+  userId: string,
+  role: "admin" | "user"
+): Promise<{ error?: string }> {
+  await assertAdmin();
+  const admin = serviceClient();
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ role })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function updateUserProfile(
+  userId: string,
+  fields: { display_name?: string; username?: string }
+): Promise<{ error?: string }> {
+  await assertAdmin();
+  const admin = serviceClient();
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) {
+    if (error.code === "23505") return { error: "That username is already taken." };
+    return { error: error.message };
+  }
+  return {};
+}
+
+export async function deleteUser(userId: string): Promise<{ error?: string }> {
+  await assertAdmin();
+  const admin = serviceClient();
+
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function inviteUser(email: string): Promise<{ error?: string }> {
+  await assertAdmin();
+  const admin = serviceClient();
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(email);
+  if (error) return { error: error.message };
+  return {};
+}

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import chapters from "@/data";
 import Sidebar from "@/components/Sidebar";
@@ -16,6 +16,14 @@ import Link from "next/link";
 import OnboardingModal from "@/components/OnboardingModal";
 
 export default function Home() {
+  return (
+    <Suspense>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState<AllProgress | null>(null);

@@ -53,6 +53,7 @@ export default function ProfilePage() {
     display_name: null,
     last_chapter_id: null,
     last_tab_slug: null,
+    role: "user",
   });
   const [progress, setProgress] = useState<AllProgress>({});
   const [username, setUsername] = useState("");

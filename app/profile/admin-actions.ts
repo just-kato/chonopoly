@@ -57,7 +57,8 @@ export async function listUsers(): Promise<UserRow[]> {
       display_name: profileMap.get(u.id)?.display_name ?? null,
       role: (profileMap.get(u.id)?.role ?? "user") as "admin" | "user",
       created_at: u.created_at,
-      invited: !u.email_confirmed_at,
+      // invited_at is set for email invites; treat as pending until email is confirmed
+      invited: !!u.invited_at && !u.email_confirmed_at,
     }))
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
@@ -106,17 +107,32 @@ export async function deleteUser(userId: string): Promise<{ error?: string }> {
   return {};
 }
 
-export async function inviteUser(email: string): Promise<{ error?: string }> {
-  await assertAdmin();
-  const admin = serviceClient();
-
+async function getRedirectOrigin(): Promise<string> {
   const headersList = await headers();
-  // Prefer explicit site URL env var, then Vercel's auto-set URL, then request origin
-  const origin =
+  return (
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
     headersList.get("origin") ??
-    `https://${headersList.get("host")}`;
+    `https://${headersList.get("host")}`
+  );
+}
+
+export async function inviteUser(email: string): Promise<{ error?: string }> {
+  await assertAdmin();
+  const admin = serviceClient();
+  const origin = await getRedirectOrigin();
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${origin}/setup`,
+  });
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function resendInvite(email: string): Promise<{ error?: string }> {
+  await assertAdmin();
+  const admin = serviceClient();
+  const origin = await getRedirectOrigin();
 
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${origin}/setup`,

@@ -9,7 +9,8 @@
       "Bash(npm uninstall *)",
       "Bash(git commit -m 'Add invite onboarding flow, role pills, first/last name support *)",
       "Bash(git commit *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(git branch *)"
     ]
   }
 }

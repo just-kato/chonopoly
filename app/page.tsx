@@ -13,7 +13,6 @@ import {
 } from "@/lib/supabase/progress";
 import { saveLastPosition, loadProfile } from "@/lib/supabase/profile";
 import Link from "next/link";
-import OnboardingModal from "@/components/OnboardingModal";
 
 export default function Home() {
   return (
@@ -29,7 +28,6 @@ function HomeContent() {
   const [progress, setProgress] = useState<AllProgress | null>(null);
   const [initials, setInitials] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const initialLoadDone = useRef(false);
 
   const chapterId = searchParams.get("chapter") ?? chapters[0].id;
@@ -39,9 +37,10 @@ function HomeContent() {
 
   useEffect(() => {
     loadProfile().then((p) => {
-      const raw = p.display_name || p.username || "";
-      setInitials(raw.slice(0, 2).toUpperCase());
-      if (!p.display_name && !p.username) setShowOnboarding(true);
+      const initials = p.first_name && p.last_name
+        ? (p.first_name[0] + p.last_name[0]).toUpperCase()
+        : (p.display_name || p.username || "").slice(0, 2).toUpperCase();
+      setInitials(initials);
     });
   }, []);
 
@@ -128,15 +127,6 @@ function HomeContent() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {showOnboarding && (
-        <OnboardingModal
-          onComplete={(displayName, username) => {
-            setInitials((displayName || username).slice(0, 2).toUpperCase());
-            setShowOnboarding(false);
-          }}
-        />
-      )}
-
       <Link
         href="/profile"
         title="Profile"

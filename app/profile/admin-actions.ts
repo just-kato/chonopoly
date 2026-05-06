@@ -1,4 +1,5 @@
 "use server";
+import { headers } from "next/headers";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
@@ -7,6 +8,8 @@ export type UserRow = {
   email: string;
   username: string | null;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   role: "admin" | "user";
   created_at: string;
 };
@@ -39,7 +42,7 @@ export async function listUsers(): Promise<UserRow[]> {
 
   const [{ data: authData }, { data: profiles }] = await Promise.all([
     admin.auth.admin.listUsers({ perPage: 1000 }),
-    admin.from("profiles").select("id, username, display_name, role"),
+    admin.from("profiles").select("id, username, display_name, first_name, last_name, role"),
   ]);
 
   const profileMap = new Map(
@@ -53,6 +56,8 @@ export async function listUsers(): Promise<UserRow[]> {
       email: u.email ?? "",
       username: profileMap.get(u.id)?.username ?? null,
       display_name: profileMap.get(u.id)?.display_name ?? null,
+      first_name: profileMap.get(u.id)?.first_name ?? null,
+      last_name: profileMap.get(u.id)?.last_name ?? null,
       role: (profileMap.get(u.id)?.role ?? "user") as "admin" | "user",
       created_at: u.created_at,
     }))
@@ -77,7 +82,7 @@ export async function updateUserRole(
 
 export async function updateUserProfile(
   userId: string,
-  fields: { display_name?: string; username?: string }
+  fields: { display_name?: string; username?: string; first_name?: string; last_name?: string }
 ): Promise<{ error?: string }> {
   await assertAdmin();
   const admin = serviceClient();
@@ -107,7 +112,13 @@ export async function inviteUser(email: string): Promise<{ error?: string }> {
   await assertAdmin();
   const admin = serviceClient();
 
-  const { error } = await admin.auth.admin.inviteUserByEmail(email);
+  const headersList = await headers();
+  const origin =
+    headersList.get("origin") ?? `https://${headersList.get("host")}`;
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${origin}/setup`,
+  });
   if (error) return { error: error.message };
   return {};
 }

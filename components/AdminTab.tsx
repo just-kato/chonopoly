@@ -31,7 +31,7 @@ function RoleBadge({ role }: { role: "admin" | "user" }) {
   );
 }
 
-type EditState = { userId: string; display_name: string; username: string } | null;
+type EditState = { userId: string; first_name: string; last_name: string; display_name: string; username: string } | null;
 
 export default function AdminTab() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -78,6 +78,8 @@ export default function AdminTab() {
     setEditSaving(true);
     setEditError(null);
     const result = await updateUserProfile(editState.userId, {
+      first_name: editState.first_name || undefined,
+      last_name: editState.last_name || undefined,
       display_name: editState.display_name || undefined,
       username: editState.username || undefined,
     });
@@ -86,7 +88,13 @@ export default function AdminTab() {
     setUsers((prev) =>
       prev.map((u) =>
         u.id === editState.userId
-          ? { ...u, display_name: editState.display_name || null, username: editState.username || null }
+          ? {
+              ...u,
+              first_name: editState.first_name || null,
+              last_name: editState.last_name || null,
+              display_name: editState.display_name || null,
+              username: editState.username || null,
+            }
           : u
       )
     );
@@ -168,7 +176,9 @@ export default function AdminTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm text-white font-medium truncate">
-                      {user.display_name || user.username || "—"}
+                      {user.first_name && user.last_name
+                        ? `${user.first_name} ${user.last_name}`
+                        : user.display_name || user.username || "—"}
                     </span>
                     {user.username && (
                       <span className="text-xs text-[#7a7870]">@{user.username}</span>
@@ -184,6 +194,8 @@ export default function AdminTab() {
                     onClick={() =>
                       setEditState({
                         userId: user.id,
+                        first_name: user.first_name ?? "",
+                        last_name: user.last_name ?? "",
                         display_name: user.display_name ?? "",
                         username: user.username ?? "",
                       })
@@ -231,6 +243,24 @@ export default function AdminTab() {
               {/* Inline edit form */}
               {editState?.userId === user.id && (
                 <div className="px-4 py-4 border-t border-[#2e2e38] flex flex-col gap-3 bg-[#0f0f11]">
+                  <div className="flex gap-2">
+                    <input
+                      value={editState.first_name}
+                      onChange={(e) =>
+                        setEditState((s) => s && { ...s, first_name: e.target.value })
+                      }
+                      placeholder="First name"
+                      className="flex-1 bg-[#18181c] border border-[#2e2e38] rounded-lg px-3 py-2 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                    <input
+                      value={editState.last_name}
+                      onChange={(e) =>
+                        setEditState((s) => s && { ...s, last_name: e.target.value })
+                      }
+                      placeholder="Last name"
+                      className="flex-1 bg-[#18181c] border border-[#2e2e38] rounded-lg px-3 py-2 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <input
                       value={editState.display_name}

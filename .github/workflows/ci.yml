@@ -32,7 +32,7 @@ jobs:
     # Job-level env: inherited by npm run build, npm run test,
     # and the `next start` subprocess Playwright spawns via webServer
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_DATA_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_DATA_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       TEST_EMAIL: ${{ secrets.CYPRESS_TEST_EMAIL }}
       TEST_PASSWORD: ${{ secrets.CYPRESS_TEST_PASSWORD }}

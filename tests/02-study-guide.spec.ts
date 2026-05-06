@@ -13,7 +13,8 @@ test.describe("Sidebar navigation", () => {
   test("renders the sidebar with chapters", async ({ page }) => {
     await expect(page.getByText("Real Estate Study Guide")).toBeVisible();
     await expect(page.getByText("CHAPTER 1")).toBeVisible();
-    await expect(page.getByText("Kinds of Professional Activity")).toBeVisible();
+    // Use button role to target the sidebar entry specifically (heading also contains this text)
+    await expect(page.getByRole("button", { name: /Kinds of Professional Activity/ })).toBeVisible();
   });
 
   test("active chapter is highlighted", async ({ page }) => {
@@ -24,7 +25,7 @@ test.describe("Sidebar navigation", () => {
   test("navigates to a different chapter", async ({ page }) => {
     await page.getByRole("button", { name: /Kinds of Property/ }).click();
     await expect(page).toHaveURL(/chapter=1-2/);
-    await expect(page.getByText(/1\.2.*Kinds of Property/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Kinds of Property/ })).toBeVisible();
   });
 
   test("active indicator updates after chapter change", async ({ page }) => {

@@ -16,8 +16,8 @@ test.describe("Key Terms", () => {
   });
 
   test("terms start collapsed", async ({ page }) => {
-    // Definitions only show inside the expanded panel, which has border-t
-    await expect(page.locator("div.border-t").filter({ hasText: /.+/ }).first()).not.toBeVisible();
+    // Definition panels are conditionally rendered — none exist in main when all terms are collapsed
+    await expect(page.locator("main div.border-t").first()).not.toBeVisible();
   });
 
   test("clicking a term expands its definition", async ({ page }) => {
@@ -27,11 +27,13 @@ test.describe("Key Terms", () => {
   });
 
   test("clicking an expanded term collapses it", async ({ page }) => {
-    const firstTerm = page.locator(".font-mono.text-amber-400").first().locator("..").locator("..");
+    // Scope to main to avoid matching the sidebar's progress section (also has border-t + p)
+    const main = page.locator("main");
+    const firstTerm = main.locator(".font-mono.text-amber-400").first().locator("..").locator("..");
     await firstTerm.click();
-    await expect(page.locator("div.border-t p").first()).toBeVisible();
+    await expect(main.locator("div.border-t p").first()).toBeVisible();
     await firstTerm.click();
-    await expect(page.locator("div.border-t p").first()).not.toBeVisible();
+    await expect(main.locator("div.border-t p").first()).not.toBeVisible();
   });
 });
 
@@ -92,12 +94,13 @@ test.describe("Concept Cards", () => {
   });
 
   test("clicking a concept card expands it", async ({ page }) => {
-    await page.locator("button.w-full").first().click();
+    // Scope to main — sidebar chapter buttons also have w-full and appear first in the DOM
+    await page.locator("main").locator("button.w-full").first().click();
     await expect(page.locator("div.concept-body").first()).toBeVisible();
   });
 
   test("clicking again collapses it", async ({ page }) => {
-    const card = page.locator("button.w-full").first();
+    const card = page.locator("main").locator("button.w-full").first();
     await card.click();
     await expect(page.locator("div.concept-body").first()).toBeVisible();
     await card.click();

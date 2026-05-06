@@ -17,25 +17,27 @@ test.describe("Mobile layout", () => {
   });
 
   test("sidebar is off-screen by default", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Close menu" })).not.toBeVisible();
+    // When closed, sidebar slides off-screen and is clipped by overflow-hidden parent
+    await expect(page.getByText("Real Estate Study Guide")).not.toBeInViewport();
   });
 
   test("hamburger opens the sidebar", async ({ page }) => {
     await page.getByRole("button", { name: "Open menu" }).click();
-    await expect(page.getByRole("button", { name: "Close menu" })).toBeVisible();
-    await expect(page.getByText("Real Estate Study Guide")).toBeVisible();
+    await expect(page.getByText("Real Estate Study Guide")).toBeInViewport();
   });
 
   test("X button closes the sidebar", async ({ page }) => {
     await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(page.getByText("Real Estate Study Guide")).toBeInViewport();
     await page.getByRole("button", { name: "Close menu" }).click();
-    await expect(page.getByRole("button", { name: "Close menu" })).not.toBeVisible();
+    // Wait for the 300ms slide-out transition then confirm off-screen
+    await expect(page.getByText("Real Estate Study Guide")).not.toBeInViewport();
   });
 
   test("selecting a chapter closes the sidebar and navigates", async ({ page }) => {
     await page.getByRole("button", { name: "Open menu" }).click();
     await page.getByRole("button", { name: /Kinds of Property/ }).click();
-    await expect(page.getByRole("button", { name: "Close menu" })).not.toBeVisible();
+    await expect(page.getByText("Real Estate Study Guide")).not.toBeInViewport();
     await expect(page).toHaveURL(/chapter=1-2/);
   });
 });

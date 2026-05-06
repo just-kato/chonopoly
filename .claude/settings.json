@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(npx cypress *)",
+      "Bash(sw_vers)",
+      "Bash(npx playwright *)",
+      "Bash(npm uninstall *)"
+    ]
+  }
+}

@@ -16,9 +16,10 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
-    // Explicitly forward Supabase vars so the spawned `next start` process
-    // has them at runtime — required by the middleware on every request.
+    // Explicitly forward all Supabase vars to the spawned `next start` process —
+    // the middleware reads these from process.env at runtime on every request.
     env: {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
       NEXT_PUBLIC_SUPABASE_DATA_URL: process.env.NEXT_PUBLIC_SUPABASE_DATA_URL ?? "",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
     },

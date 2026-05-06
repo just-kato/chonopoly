@@ -28,6 +28,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState<AllProgress | null>(null);
   const [initials, setInitials] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -153,8 +154,10 @@ function HomeContent() {
         progress={progress ?? {}}
         completedCount={completedCount}
         totalCount={chapters.length}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto min-w-0">
         <ChapterView
           key={activeChapter.id}
           chapter={activeChapter}
@@ -162,6 +165,7 @@ function HomeContent() {
           onTabChange={handleTabChange}
           onQuizComplete={(passed, score) => recordQuizComplete(activeChapter.id, passed, score)}
           onNextChapter={nextChapter ? () => handleSelectChapter(nextChapter.id) : undefined}
+          onMenuClick={() => setSidebarOpen(true)}
         />
       </main>
     </div>

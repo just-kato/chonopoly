@@ -31,6 +31,14 @@ function RoleBadge({ role }: { role: "admin" | "user" }) {
   );
 }
 
+function InvitedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 bg-emerald-500/15 text-emerald-400 font-mono text-[10px] tracking-widest px-2 py-0.5 rounded">
+      INVITED
+    </span>
+  );
+}
+
 type EditState = { userId: string; display_name: string; username: string } | null;
 
 export default function AdminTab() {
@@ -167,31 +175,33 @@ export default function AdminTab() {
                 <Avatar name={user.display_name} email={user.email} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm text-white font-medium truncate">
-                      {user.display_name || user.username || "—"}
+                    <span className={`text-sm font-medium truncate ${user.invited ? "text-[#7a7870]" : "text-white"}`}>
+                      {user.display_name || user.username || (user.invited ? "Pending…" : "—")}
                     </span>
                     {user.username && (
                       <span className="text-xs text-[#7a7870]">@{user.username}</span>
                     )}
-                    <RoleBadge role={user.role} />
+                    {user.invited ? <InvitedBadge /> : <RoleBadge role={user.role} />}
                   </div>
                   <p className="text-xs text-[#7a7870] truncate">{user.email}</p>
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() =>
-                      setEditState({
-                        userId: user.id,
-                        display_name: user.display_name ?? "",
-                        username: user.username ?? "",
-                      })
-                    }
-                    className="px-2.5 py-1.5 text-xs text-[#7a7870] hover:text-white bg-[#0f0f11] hover:bg-[#2e2e38] rounded-lg transition-colors"
-                  >
-                    Edit
-                  </button>
+                  {!user.invited && (
+                    <button
+                      onClick={() =>
+                        setEditState({
+                          userId: user.id,
+                          display_name: user.display_name ?? "",
+                          username: user.username ?? "",
+                        })
+                      }
+                      className="px-2.5 py-1.5 text-xs text-[#7a7870] hover:text-white bg-[#0f0f11] hover:bg-[#2e2e38] rounded-lg transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
                     onClick={() => handleRoleToggle(user)}
                     title={user.role === "admin" ? "Revoke admin" : "Make admin"}

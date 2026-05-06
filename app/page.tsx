@@ -12,7 +12,8 @@ import {
   type AllProgress,
 } from "@/lib/supabase/progress";
 import { saveLastPosition, loadProfile } from "@/lib/supabase/profile";
-import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import ProfileDropdown from "@/components/ProfileDropdown";
 
 export default function Home() {
   return (
@@ -27,6 +28,8 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState<AllProgress | null>(null);
   const [initials, setInitials] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -36,8 +39,20 @@ function HomeContent() {
   const activeChapter = chapters.find((c) => c.id === chapterId) ?? chapters[0];
 
   useEffect(() => {
+    const supabase = createClient();
+    // getSession reads from local cache — no network call, resolves immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setProfileEmail(session.user.email);
+        // Seed initials from email right away so "?" never shows
+        setInitials(session.user.email.slice(0, 2).toUpperCase());
+      }
+    });
+    // Then overwrite with nicer initials once profile loads
     loadProfile().then((p) => {
-      setInitials((p.display_name || p.username || "").slice(0, 2).toUpperCase());
+      const name = p.display_name || p.username || "";
+      setProfileName(name);
+      if (name) setInitials(name.slice(0, 2).toUpperCase());
     });
   }, []);
 
@@ -124,15 +139,7 @@ function HomeContent() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Link
-        href="/profile"
-        title="Profile"
-        className="fixed top-4 right-4 z-50 w-9 h-9 rounded-full bg-amber-400/20 border border-amber-400/40 hover:bg-amber-400/30 hover:border-amber-400 flex items-center justify-center transition-colors"
-      >
-        <span className="text-amber-400 font-mono font-bold text-xs">
-          {initials || "?"}
-        </span>
-      </Link>
+      <ProfileDropdown initials={initials} name={profileName} email={profileEmail} />
 
       <Sidebar
         chapters={chapters}

@@ -10,6 +10,7 @@ export type UserRow = {
   display_name: string | null;
   role: "admin" | "user";
   created_at: string;
+  invited: boolean;
 };
 
 function serviceClient() {
@@ -56,6 +57,7 @@ export async function listUsers(): Promise<UserRow[]> {
       display_name: profileMap.get(u.id)?.display_name ?? null,
       role: (profileMap.get(u.id)?.role ?? "user") as "admin" | "user",
       created_at: u.created_at,
+      invited: !u.email_confirmed_at,
     }))
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
@@ -109,8 +111,12 @@ export async function inviteUser(email: string): Promise<{ error?: string }> {
   const admin = serviceClient();
 
   const headersList = await headers();
+  // Prefer explicit site URL env var, then Vercel's auto-set URL, then request origin
   const origin =
-    headersList.get("origin") ?? `https://${headersList.get("host")}`;
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    headersList.get("origin") ??
+    `https://${headersList.get("host")}`;
 
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${origin}/setup`,

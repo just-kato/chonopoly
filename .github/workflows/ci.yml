@@ -12,7 +12,7 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_DATA_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_DATA_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +24,7 @@ jobs:
       - name: Check env vars are set
         run: |
           [[ -n "$NEXT_PUBLIC_SUPABASE_URL" ]] && echo "SUPABASE_URL is set" || echo "SUPABASE_URL is MISSING"
-          [[ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && echo "SUPABASE_ANON_KEY is set" || echo "SUPABASE_ANON_KEY is MISSING"
+          [[ -n "$SUPABASE_ANON_KEY" ]] && echo "SUPABASE_ANON_KEY is set" || echo "SUPABASE_ANON_KEY is MISSING"
 
       - run: npm ci
       - run: npm run build
@@ -37,7 +37,7 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_DATA_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_DATA_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
       TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
     steps:
@@ -51,14 +51,14 @@ jobs:
       - name: Check env vars are set
         run: |
           [[ -n "$NEXT_PUBLIC_SUPABASE_URL" ]] && echo "SUPABASE_URL is set" || echo "SUPABASE_URL is MISSING"
-          [[ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && echo "SUPABASE_ANON_KEY is set" || echo "SUPABASE_ANON_KEY is MISSING"
+          [[ -n "$SUPABASE_ANON_KEY" ]] && echo "SUPABASE_ANON_KEY is set" || echo "SUPABASE_ANON_KEY is MISSING"
           [[ -n "$TEST_EMAIL" ]] && echo "TEST_EMAIL is set" || echo "TEST_EMAIL is MISSING"
 
       - name: Write .env.local
         run: |
           printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
           printf 'NEXT_PUBLIC_SUPABASE_DATA_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_DATA_URL" >> .env.local
-          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> .env.local
+          printf 'SUPABASE_ANON_KEY=%s\n' "$SUPABASE_ANON_KEY" >> .env.local
 
       - run: npm ci
 

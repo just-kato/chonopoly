@@ -33,22 +33,23 @@ function SetupContent() {
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    const code = searchParams.get("code");
-    if (!code) {
+    // The auth/callback route already exchanged the code server-side.
+    // We just need to read the established session.
+    const error = searchParams.get("error");
+    if (error) {
       setExchangeError("Invalid or expired invite link. Please ask an admin to send a new one.");
       setStatus("error");
       return;
     }
 
     const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(async ({ error }) => {
-      if (error) {
-        setExchangeError(error.message);
+    supabase.auth.getUser().then(({ data: { user }, error: userError }) => {
+      if (userError || !user) {
+        setExchangeError("Invalid or expired invite link. Please ask an admin to send a new one.");
         setStatus("error");
         return;
       }
-      const { data: { user } } = await supabase.auth.getUser();
-      setEmail(user?.email ?? "");
+      setEmail(user.email ?? "");
       setStatus("ready");
     });
   }, [searchParams]);

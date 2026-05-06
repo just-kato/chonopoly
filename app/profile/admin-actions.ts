@@ -122,7 +122,7 @@ async function sendInvite(email: string): Promise<{ error?: string }> {
   const origin = await getRedirectOrigin();
 
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/setup`,
+    redirectTo: `${origin}/auth/callback?next=/setup`,
   });
   if (error) return { error: error.message };
   return {};

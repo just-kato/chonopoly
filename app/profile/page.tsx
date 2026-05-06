@@ -77,7 +77,10 @@ export default function ProfilePage() {
 
   async function handleSave() {
     setSaving(true);
-    const result = await updateProfile(username || null, displayName || null);
+    const result = await updateProfile({
+      username: username || null,
+      displayName: displayName || null,
+    });
     setSaving(false);
     if (result.error) {
       setSaveMsg({ text: result.error, error: true });
@@ -98,7 +101,7 @@ export default function ProfilePage() {
     : `/?chapter=${chapters[0].id}`;
 
   const isAdmin = profile.role === "admin";
-  const initials = (displayName || email || "?").slice(0, 2).toUpperCase();
+  const initials = (displayName || username || email || "?").slice(0, 2).toUpperCase();
 
   const groups: Record<string, typeof chapters> = {};
   chapters.forEach((ch) => {
@@ -126,9 +129,20 @@ export default function ProfilePage() {
             <span className="text-amber-400 font-mono font-bold text-lg">{initials}</span>
           </div>
           <div>
-            <h1 className="text-white font-serif text-xl font-bold leading-tight">
-              {displayName || username || "Your Profile"}
-            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-white font-serif text-xl font-bold leading-tight">
+                {displayName || username || "Your Profile"}
+              </h1>
+              {profile.role === "admin" ? (
+                <span className="inline-flex items-center bg-amber-400/15 text-amber-400 font-mono text-[10px] tracking-widest px-2 py-0.5 rounded">
+                  ADMIN
+                </span>
+              ) : (
+                <span className="inline-flex items-center bg-[#2e2e38] text-[#7a7870] font-mono text-[10px] tracking-widest px-2 py-0.5 rounded">
+                  USER
+                </span>
+              )}
+            </div>
             <p className="text-[#7a7870] text-sm">{email}</p>
           </div>
         </div>

@@ -6,7 +6,9 @@
       "Bash(npx cypress *)",
       "Bash(sw_vers)",
       "Bash(npx playwright *)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(git commit -m 'Add invite onboarding flow, role pills, first/last name support *)",
+      "Bash(git commit *)"
     ]
   }
 }

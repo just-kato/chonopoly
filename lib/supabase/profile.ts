@@ -49,10 +49,10 @@ export async function saveLastPosition(
   );
 }
 
-export async function updateProfile(
-  username: string | null,
-  displayName: string | null
-): Promise<{ error?: string }> {
+export async function updateProfile(fields: {
+  username?: string | null;
+  displayName?: string | null;
+}): Promise<{ error?: string }> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
@@ -60,8 +60,8 @@ export async function updateProfile(
   const { error } = await supabase.from("profiles").upsert(
     {
       id: user.id,
-      username: username || null,
-      display_name: displayName || null,
+      ...(fields.username !== undefined && { username: fields.username || null }),
+      ...(fields.displayName !== undefined && { display_name: fields.displayName || null }),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }

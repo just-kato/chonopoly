@@ -1,4 +1,5 @@
 "use server";
+import { headers } from "next/headers";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
@@ -107,7 +108,13 @@ export async function inviteUser(email: string): Promise<{ error?: string }> {
   await assertAdmin();
   const admin = serviceClient();
 
-  const { error } = await admin.auth.admin.inviteUserByEmail(email);
+  const headersList = await headers();
+  const origin =
+    headersList.get("origin") ?? `https://${headersList.get("host")}`;
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${origin}/setup`,
+  });
   if (error) return { error: error.message };
   return {};
 }

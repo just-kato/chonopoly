@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Trash2, ShieldCheck, ShieldOff, UserPlus, Loader2 } from "lucide-react";
+import { Trash2, ShieldCheck, ShieldOff, UserPlus, Loader2, RefreshCw } from "lucide-react";
 import {
   listUsers,
   updateUserRole,
   updateUserProfile,
   deleteUser,
   inviteUser,
+  resendInvite,
   type UserRow,
 } from "@/app/profile/admin-actions";
 
@@ -52,6 +53,7 @@ export default function AdminTab() {
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [resending, setResending] = useState<string | null>(null);
 
   useEffect(() => {
     listUsers()
@@ -79,6 +81,13 @@ export default function AdminTab() {
     if (result.error) { flash(result.error); setConfirmDelete(null); return; }
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     setConfirmDelete(null);
+  }
+
+  async function handleResend(user: UserRow) {
+    setResending(user.id);
+    const result = await resendInvite(user.email);
+    setResending(null);
+    flash(result.error ? result.error : `Invite resent to ${user.email}.`);
   }
 
   async function handleEditSave() {
@@ -188,38 +197,65 @@ export default function AdminTab() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 shrink-0">
-                  {!user.invited && (
-                    <button
-                      onClick={() =>
-                        setEditState({
-                          userId: user.id,
-                          display_name: user.display_name ?? "",
-                          username: user.username ?? "",
-                        })
-                      }
-                      className="px-2.5 py-1.5 text-xs text-[#7a7870] hover:text-white bg-[#0f0f11] hover:bg-[#2e2e38] rounded-lg transition-colors"
-                    >
-                      Edit
-                    </button>
+                  {user.invited ? (
+                    // Invited (pending) users get resend + cancel only
+                    <>
+                      <button
+                        onClick={() => handleResend(user)}
+                        disabled={resending === user.id}
+                        title="Resend invite"
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {resending === user.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        Resend
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
+                          confirmDelete === user.id
+                            ? "text-red-400 bg-red-500/15"
+                            : "text-[#7a7870] hover:text-red-400 hover:bg-red-500/10"
+                        }`}
+                        title={confirmDelete === user.id ? "Click again to confirm" : "Cancel invite"}
+                      >
+                        {confirmDelete === user.id ? "Confirm" : "Cancel invite"}
+                      </button>
+                    </>
+                  ) : (
+                    // Active users get edit + role toggle + delete
+                    <>
+                      <button
+                        onClick={() =>
+                          setEditState({
+                            userId: user.id,
+                            display_name: user.display_name ?? "",
+                            username: user.username ?? "",
+                          })
+                        }
+                        className="px-2.5 py-1.5 text-xs text-[#7a7870] hover:text-white bg-[#0f0f11] hover:bg-[#2e2e38] rounded-lg transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleRoleToggle(user)}
+                        title={user.role === "admin" ? "Revoke admin" : "Make admin"}
+                        className="p-1.5 text-[#7a7870] hover:text-amber-400 rounded-lg hover:bg-amber-400/10 transition-colors"
+                      >
+                        {user.role === "admin" ? <ShieldOff size={15} /> : <ShieldCheck size={15} />}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          confirmDelete === user.id
+                            ? "text-red-400 bg-red-500/15"
+                            : "text-[#7a7870] hover:text-red-400 hover:bg-red-500/10"
+                        }`}
+                        title={confirmDelete === user.id ? "Click again to confirm" : "Delete user"}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => handleRoleToggle(user)}
-                    title={user.role === "admin" ? "Revoke admin" : "Make admin"}
-                    className="p-1.5 text-[#7a7870] hover:text-amber-400 rounded-lg hover:bg-amber-400/10 transition-colors"
-                  >
-                    {user.role === "admin" ? <ShieldOff size={15} /> : <ShieldCheck size={15} />}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(user.id)}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      confirmDelete === user.id
-                        ? "text-red-400 bg-red-500/15"
-                        : "text-[#7a7870] hover:text-red-400 hover:bg-red-500/10"
-                    }`}
-                    title={confirmDelete === user.id ? "Click again to confirm" : "Delete user"}
-                  >
-                    <Trash2 size={15} />
-                  </button>
                 </div>
               </div>
 
@@ -227,13 +263,15 @@ export default function AdminTab() {
               {confirmDelete === user.id && (
                 <div className="flex items-center justify-between px-4 py-2.5 bg-red-500/10 border-t border-red-500/20">
                   <p className="text-xs text-red-400">
-                    This permanently deletes the account. Click the trash icon again to confirm.
+                    {user.invited
+                      ? "This cancels the invite and removes the pending account."
+                      : "This permanently deletes the account. Click confirm to proceed."}
                   </p>
                   <button
                     onClick={() => setConfirmDelete(null)}
                     className="text-xs text-[#7a7870] hover:text-white ml-4 shrink-0"
                   >
-                    Cancel
+                    Dismiss
                   </button>
                 </div>
               )}

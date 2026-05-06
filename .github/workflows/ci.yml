@@ -23,7 +23,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
-  # ── 2. Run Playwright E2E suite against the production build ──────────────
+  # ── 2. Run Playwright E2E suite ────────────────────────────────────────────
   playwright:
     name: Playwright E2E
     runs-on: ubuntu-latest
@@ -47,18 +47,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
-      - name: Start app
-        run: npm run start &
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-
-      - name: Wait for server
-        run: npx wait-on http://localhost:3000 --timeout 30000
-
       - name: Run Playwright tests
         run: npm run test
         env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           TEST_EMAIL: ${{ secrets.CYPRESS_TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.CYPRESS_TEST_PASSWORD }}
 

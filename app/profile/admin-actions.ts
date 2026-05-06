@@ -10,6 +10,7 @@ export type UserRow = {
   display_name: string | null;
   role: "admin" | "user";
   created_at: string;
+  invited: boolean;
 };
 
 function serviceClient() {
@@ -56,6 +57,7 @@ export async function listUsers(): Promise<UserRow[]> {
       display_name: profileMap.get(u.id)?.display_name ?? null,
       role: (profileMap.get(u.id)?.role ?? "user") as "admin" | "user",
       created_at: u.created_at,
+      invited: !u.email_confirmed_at,
     }))
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }

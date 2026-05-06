@@ -89,8 +89,9 @@ test.describe("Profile button", () => {
     await page.goto("/");
   });
 
-  test("profile link is visible and navigates", async ({ page }) => {
-    await page.locator('a[href="/profile"]').click();
+  test("profile dropdown opens and navigates to profile", async ({ page }) => {
+    await page.getByRole("button", { name: "Profile menu" }).click();
+    await page.getByRole("link", { name: "Profile" }).click();
     await expect(page).toHaveURL(/\/profile/);
   });
 });

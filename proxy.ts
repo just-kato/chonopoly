@@ -31,7 +31,8 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (!user && pathname !== "/login") {
+  const publicPaths = ["/login", "/reset-password"];
+  if (!user && !publicPaths.includes(pathname)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

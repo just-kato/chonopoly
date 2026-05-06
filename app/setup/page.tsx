@@ -54,10 +54,16 @@ function SetupContent() {
       if (session?.user) resolve(session.user);
     });
 
-    // Also check immediately — handles PKCE flow where callback already set the session.
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) resolve(user);
-    });
+    // Only fall back to getUser() when there are no hash tokens in the URL.
+    // If hash tokens ARE present, onAuthStateChange will fire with the invited
+    // user's session. Calling getUser() here would return the admin's existing
+    // session before the hash tokens are processed, prefilling the wrong email.
+    const hasHashTokens = window.location.hash.includes("access_token");
+    if (!hasHashTokens) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) resolve(user);
+      });
+    }
 
     // If no session detected after 2s, show the error.
     const timer = setTimeout(() => resolve(null), 2000);

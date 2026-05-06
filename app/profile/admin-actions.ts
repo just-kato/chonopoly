@@ -111,8 +111,12 @@ export async function inviteUser(email: string): Promise<{ error?: string }> {
   const admin = serviceClient();
 
   const headersList = await headers();
+  // Prefer explicit site URL env var, then Vercel's auto-set URL, then request origin
   const origin =
-    headersList.get("origin") ?? `https://${headersList.get("host")}`;
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    headersList.get("origin") ??
+    `https://${headersList.get("host")}`;
 
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${origin}/setup`,

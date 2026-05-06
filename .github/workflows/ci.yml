@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # ── 1. Verify the Next.js build compiles cleanly ──────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_DATA_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_DATA_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Check env vars are set
+        run: |
+          [[ -n "$NEXT_PUBLIC_SUPABASE_URL" ]] && echo "SUPABASE_URL is set" || echo "SUPABASE_URL is MISSING"
+          [[ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && echo "SUPABASE_ANON_KEY is set" || echo "SUPABASE_ANON_KEY is MISSING"
+
+      - run: npm ci
+      - run: npm run build
+
+  # ── 2. Run Playwright E2E suite ────────────────────────────────────────────
+  playwright:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_DATA_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_DATA_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Check env vars are set
+        run: |
+          [[ -n "$NEXT_PUBLIC_SUPABASE_URL" ]] && echo "SUPABASE_URL is set" || echo "SUPABASE_URL is MISSING"
+          [[ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && echo "SUPABASE_ANON_KEY is set" || echo "SUPABASE_ANON_KEY is MISSING"
+          [[ -n "$TEST_EMAIL" ]] && echo "TEST_EMAIL is set" || echo "TEST_EMAIL is MISSING"
+
+      - name: Write .env.local
+        run: |
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
+          printf 'NEXT_PUBLIC_SUPABASE_DATA_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_DATA_URL" >> .env.local
+          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> .env.local
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app
+        run: npm run build
+
+      - name: Run Playwright tests
+        run: npm run test
+
+      - name: Upload report on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

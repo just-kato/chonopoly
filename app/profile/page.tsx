@@ -119,7 +119,7 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-10">
+      <div className="max-w-2xl mx-auto px-4 md:px-6 py-8 md:py-10">
         {/* Avatar + identity */}
         <div className="flex items-center gap-4 mb-8">
           <div className="w-14 h-14 rounded-full bg-amber-400/20 border border-amber-400/30 flex items-center justify-center shrink-0">
@@ -235,7 +235,7 @@ export default function ProfilePage() {
           <div>
             {/* Course card */}
             <div className="bg-[#18181c] border border-[#2e2e38] rounded-xl p-6 mb-8">
-              <div className="flex items-center gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6">
                 <ProgressCircle pct={pct} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-mono text-amber-400 tracking-widest mb-1">

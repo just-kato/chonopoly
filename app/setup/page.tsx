@@ -33,26 +33,40 @@ function SetupContent() {
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    // The auth/callback route already exchanged the code server-side.
-    // We just need to read the established session.
-    const error = searchParams.get("error");
-    if (error) {
-      setExchangeError("Invalid or expired invite link. Please ask an admin to send a new one.");
-      setStatus("error");
-      return;
-    }
-
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user }, error: userError }) => {
-      if (userError || !user) {
+    let resolved = false;
+
+    const resolve = (user: { email?: string | null } | null) => {
+      if (resolved) return;
+      resolved = true;
+      if (user) {
+        setEmail(user.email ?? "");
+        setStatus("ready");
+      } else {
         setExchangeError("Invalid or expired invite link. Please ask an admin to send a new one.");
         setStatus("error");
-        return;
       }
-      setEmail(user.email ?? "");
-      setStatus("ready");
+    };
+
+    // Supabase may use implicit flow (tokens in URL hash).
+    // The browser client detects these automatically and fires onAuthStateChange.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) resolve(session.user);
     });
-  }, [searchParams]);
+
+    // Also check immediately — handles PKCE flow where callback already set the session.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) resolve(user);
+    });
+
+    // If no session detected after 2s, show the error.
+    const timer = setTimeout(() => resolve(null), 2000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

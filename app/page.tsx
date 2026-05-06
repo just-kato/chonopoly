@@ -37,10 +37,7 @@ function HomeContent() {
 
   useEffect(() => {
     loadProfile().then((p) => {
-      const initials = p.first_name && p.last_name
-        ? (p.first_name[0] + p.last_name[0]).toUpperCase()
-        : (p.display_name || p.username || "").slice(0, 2).toUpperCase();
-      setInitials(initials);
+      setInitials((p.display_name || p.username || "").slice(0, 2).toUpperCase());
     });
   }, []);
 

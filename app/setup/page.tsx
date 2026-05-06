@@ -26,8 +26,6 @@ function SetupContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
@@ -66,10 +64,6 @@ function SetupContent() {
       setSubmitError("Passwords don't match.");
       return;
     }
-    if (!firstName.trim() || !lastName.trim()) {
-      setSubmitError("First and last name are required.");
-      return;
-    }
 
     setSaving(true);
     setSubmitError("");
@@ -83,9 +77,7 @@ function SetupContent() {
     }
 
     const result = await updateProfile({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      displayName: displayName.trim() || `${firstName.trim()} ${lastName.trim()}`,
+      displayName: displayName.trim() || null,
       username: username.trim() || null,
     });
 
@@ -206,34 +198,6 @@ function SetupContent() {
             <div className="border-t border-[#2e2e38] pt-5">
               <p className="text-xs font-mono text-amber-400 tracking-widest mb-4">YOUR DETAILS</p>
 
-              {/* First + Last name */}
-              <div className="flex gap-3 mb-4">
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                    First Name
-                  </label>
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    placeholder="Jane"
-                    className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                    Last Name
-                  </label>
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                    placeholder="Smith"
-                    className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-              </div>
-
               {/* Display name */}
               <div className="flex flex-col gap-1.5 mb-4">
                 <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
@@ -242,7 +206,7 @@ function SetupContent() {
                 <input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder={`${firstName || "Jane"} ${lastName || "Smith"}`}
+                  placeholder="Your name"
                   className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
                 />
               </div>

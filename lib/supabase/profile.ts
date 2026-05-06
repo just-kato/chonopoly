@@ -3,8 +3,6 @@ import { createClient } from "./client";
 export type Profile = {
   username: string | null;
   display_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
   last_chapter_id: string | null;
   last_tab_slug: string | null;
   role: "admin" | "user";
@@ -13,8 +11,6 @@ export type Profile = {
 const EMPTY: Profile = {
   username: null,
   display_name: null,
-  first_name: null,
-  last_name: null,
   last_chapter_id: null,
   last_tab_slug: null,
   role: "user",
@@ -27,7 +23,7 @@ export async function loadProfile(): Promise<Profile> {
 
   const { data } = await supabase
     .from("profiles")
-    .select("username, display_name, first_name, last_name, last_chapter_id, last_tab_slug, role")
+    .select("username, display_name, last_chapter_id, last_tab_slug, role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -56,8 +52,6 @@ export async function saveLastPosition(
 export async function updateProfile(fields: {
   username?: string | null;
   displayName?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
 }): Promise<{ error?: string }> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -68,8 +62,6 @@ export async function updateProfile(fields: {
       id: user.id,
       ...(fields.username !== undefined && { username: fields.username || null }),
       ...(fields.displayName !== undefined && { display_name: fields.displayName || null }),
-      ...(fields.firstName !== undefined && { first_name: fields.firstName || null }),
-      ...(fields.lastName !== undefined && { last_name: fields.lastName || null }),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }

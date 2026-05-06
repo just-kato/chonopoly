@@ -51,15 +51,11 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile>({
     username: null,
     display_name: null,
-    first_name: null,
-    last_name: null,
     last_chapter_id: null,
     last_tab_slug: null,
     role: "user",
   });
   const [progress, setProgress] = useState<AllProgress>({});
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -72,8 +68,6 @@ export default function ProfilePage() {
       loadAllProgress(),
     ]).then(([{ data: { user } }, profileData, progressData]) => {
       setEmail(user?.email ?? "");
-      setFirstName(profileData.first_name ?? "");
-      setLastName(profileData.last_name ?? "");
       setUsername(profileData.username ?? "");
       setDisplayName(profileData.display_name ?? "");
       setProfile(profileData);
@@ -84,8 +78,6 @@ export default function ProfilePage() {
   async function handleSave() {
     setSaving(true);
     const result = await updateProfile({
-      firstName: firstName || null,
-      lastName: lastName || null,
       username: username || null,
       displayName: displayName || null,
     });
@@ -109,9 +101,7 @@ export default function ProfilePage() {
     : `/?chapter=${chapters[0].id}`;
 
   const isAdmin = profile.role === "admin";
-  const initials = firstName && lastName
-    ? (firstName[0] + lastName[0]).toUpperCase()
-    : (displayName || email || "?").slice(0, 2).toUpperCase();
+  const initials = (displayName || username || email || "?").slice(0, 2).toUpperCase();
 
   const groups: Record<string, typeof chapters> = {};
   chapters.forEach((ch) => {
@@ -141,7 +131,7 @@ export default function ProfilePage() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-white font-serif text-xl font-bold leading-tight">
-                {firstName && lastName ? `${firstName} ${lastName}` : displayName || username || "Your Profile"}
+                {displayName || username || "Your Profile"}
               </h1>
               {profile.role === "admin" ? (
                 <span className="inline-flex items-center bg-amber-400/15 text-amber-400 font-mono text-[10px] tracking-widest px-2 py-0.5 rounded">
@@ -186,31 +176,6 @@ export default function ProfilePage() {
                 value={email}
                 className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#7a7870] cursor-not-allowed"
               />
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex flex-col gap-1.5 flex-1">
-                <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                  First Name
-                </label>
-                <input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Jane"
-                  className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5 flex-1">
-                <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                  Last Name
-                </label>
-                <input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Smith"
-                  className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
-                />
-              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">

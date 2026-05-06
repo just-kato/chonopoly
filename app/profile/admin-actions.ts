@@ -117,8 +117,7 @@ async function getRedirectOrigin(): Promise<string> {
   );
 }
 
-export async function inviteUser(email: string): Promise<{ error?: string }> {
-  await assertAdmin();
+async function sendInvite(email: string): Promise<{ error?: string }> {
   const admin = serviceClient();
   const origin = await getRedirectOrigin();
 
@@ -129,14 +128,12 @@ export async function inviteUser(email: string): Promise<{ error?: string }> {
   return {};
 }
 
+export async function inviteUser(email: string): Promise<{ error?: string }> {
+  await assertAdmin();
+  return sendInvite(email);
+}
+
 export async function resendInvite(email: string): Promise<{ error?: string }> {
   await assertAdmin();
-  const admin = serviceClient();
-  const origin = await getRedirectOrigin();
-
-  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/setup`,
-  });
-  if (error) return { error: error.message };
-  return {};
+  return sendInvite(email);
 }

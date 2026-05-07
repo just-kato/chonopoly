@@ -48,28 +48,31 @@ function SetupContent() {
       }
     };
 
-    // Supabase may use implicit flow (tokens in URL hash).
-    // The browser client detects these automatically and fires onAuthStateChange.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) resolve(session.user);
-    });
+    // Parse hash tokens manually — createBrowserClient from @supabase/ssr does
+    // not auto-detect implicit flow hash fragments the way the vanilla client does.
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
 
-    // Only fall back to getUser() when there are no hash tokens in the URL.
-    // If hash tokens ARE present, onAuthStateChange will fire with the invited
-    // user's session. Calling getUser() here would return the admin's existing
-    // session before the hash tokens are processed, prefilling the wrong email.
-    const hasHashTokens = window.location.hash.includes("access_token");
-    if (!hasHashTokens) {
+    if (accessToken && refreshToken) {
+      // Call setSession directly so the invited user's session is always used,
+      // even if the admin is logged in on the same browser.
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ data, error }) => {
+          resolve(error || !data.user ? null : data.user);
+        });
+    } else {
+      // No hash tokens — check for an existing session (PKCE via /auth/callback).
       supabase.auth.getUser().then(({ data: { user } }) => {
         if (user) resolve(user);
       });
     }
 
-    // If no session detected after 2s, show the error.
-    const timer = setTimeout(() => resolve(null), 2000);
+    // Fallback: show error if nothing resolves within 3s.
+    const timer = setTimeout(() => resolve(null), 3000);
 
     return () => {
-      subscription.unsubscribe();
       clearTimeout(timer);
     };
   }, []);

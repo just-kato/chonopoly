@@ -56,6 +56,13 @@ export default function AdminTab() {
   const [resending, setResending] = useState<string | null>(null);
 
   useEffect(() => {
+    // Allow E2E tests to inject a user list without calling the server action
+    const injected = typeof window !== "undefined" && (window as any).__TEST_ADMIN_USERS__;
+    if (injected) {
+      setUsers(injected);
+      setLoading(false);
+      return;
+    }
     listUsers()
       .then(setUsers)
       .finally(() => setLoading(false));

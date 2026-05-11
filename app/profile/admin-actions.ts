@@ -100,6 +100,10 @@ export async function deleteUser(userId: string): Promise<{ error?: string }> {
   await assertAdmin();
   const admin = serviceClient();
 
+  // Delete related rows first to avoid FK constraint violations on auth user delete
+  await admin.from("chapter_progress").delete().eq("user_id", userId);
+  await admin.from("profiles").delete().eq("id", userId);
+
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) return { error: error.message };
   return {};

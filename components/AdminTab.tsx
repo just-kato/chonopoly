@@ -183,6 +183,7 @@ export default function AdminTab() {
           {users.map((user) => (
             <div
               key={user.id}
+              data-testid="user-row"
               className="bg-[#18181c] border border-[#2e2e38] rounded-xl overflow-hidden"
             >
               {/* User row */}

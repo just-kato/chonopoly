@@ -1,8 +1,8 @@
 // Admin tab tests.
-// Server actions run server-side so we can't intercept Supabase calls.
+// Server actions run server-side so we can't intercept Supabase calls directly.
 // - User list is injected via window.__TEST_ADMIN_USERS__ before page load.
-// - State-changing actions (delete, role toggle, etc.) are intercepted at the
-//   Next.js server action POST level and return a stubbed RSC success payload.
+// - State-changing actions (delete, role toggle, save username) are intercepted at the
+//   Next.js server action POST level (POST to /profile with Next-Action header).
 // Requires TEST_EMAIL and TEST_PASSWORD.
 
 import { test, expect, type Page } from "@playwright/test";
@@ -10,7 +10,7 @@ import { test, expect, type Page } from "@playwright/test";
 test.use({ storageState: ".playwright/user.json" });
 
 // ---------------------------------------------------------------------------
-// Shared mock data
+// Mock data
 // ---------------------------------------------------------------------------
 const MOCK_ACTIVE_USER = {
   id: "user-active-1",
@@ -37,19 +37,15 @@ const MOCK_INVITED_USER = {
   invited: true,
 };
 
-// RSC wire format for a server action returning a plain value
+// RSC wire format: simple inline action result (no lazy reference needed)
 function rscSuccess(value: unknown): string {
-  return `0:{"a":"$L1","f":"","b":"test"}\n1:${JSON.stringify(value)}\n`;
+  return `0:{"a":${JSON.stringify(value)},"f":"","b":"test"}\n`;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-async function setupAdminPage(
-  page: Page,
-  users: typeof MOCK_ACTIVE_USER[] = []
-) {
-  // Stub profile as admin so the Admin tab renders
+async function setupAdminPage(page: Page, users: object[] = []) {
   await page.route("**/rest/v1/profiles**", (route) =>
     route.fulfill({
       status: 200,
@@ -69,17 +65,16 @@ async function setupAdminPage(
   await page.route("**/rest/v1/chapter_progress**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
   );
-
-  // Inject mock users before page load so AdminTab's useEffect picks them up
   await page.addInitScript((injected) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__TEST_ADMIN_USERS__ = injected;
   }, users);
 }
 
-// Intercept the server action POST to /profile and return an RSC success payload
+// Intercept the Next.js server action POST (any URL matching /profile path)
+// and return a stubbed RSC success payload so state-changing actions resolve.
 async function stubNextAction(page: Page, returnValue: unknown = {}) {
-  await page.route("**/profile", async (route, request) => {
+  await page.route("**/profile*", async (route, request) => {
     if (request.method() === "POST" && request.headers()["next-action"]) {
       await route.fulfill({
         status: 200,
@@ -92,6 +87,20 @@ async function stubNextAction(page: Page, returnValue: unknown = {}) {
   });
 }
 
+// Navigate to /profile and wait for Admin tab to be fully rendered.
+// Using waitFor on "INVITE USER" ensures the Admin tab content has mounted
+// and the Profile tab content (username input, Save changes button) has unmounted.
+async function gotoAdminTab(page: Page) {
+  await page.goto("/profile");
+  await page.getByRole("button", { name: "Admin" }).click();
+  await expect(page.getByText("INVITE USER")).toBeVisible();
+}
+
+// Scoped user-row locator — avoids strict mode violations from broader selectors
+function userRow(page: Page, email: string) {
+  return page.locator('[data-testid="user-row"]').filter({ hasText: email });
+}
+
 // ---------------------------------------------------------------------------
 // Invite form
 // ---------------------------------------------------------------------------
@@ -99,8 +108,7 @@ test.describe("Admin tab - invite user", () => {
   test.beforeEach(async ({ page }) => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page);
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
   });
 
   test("Admin tab is visible when user has admin role", async ({ page }) => {
@@ -114,8 +122,7 @@ test.describe("Admin tab - invite user", () => {
   });
 
   test("invite email input has required attribute", async ({ page }) => {
-    const input = page.locator('input[type="email"]');
-    await expect(input).toHaveAttribute("required");
+    await expect(page.locator('input[type="email"]')).toHaveAttribute("required");
   });
 
   test("submitting invite shows a feedback message", async ({ page }) => {
@@ -134,8 +141,7 @@ test.describe("Admin tab - empty user list", () => {
   test.beforeEach(async ({ page }) => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page, []);
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
   });
 
   test("shows 'No other users yet' when list is empty", async ({ page }) => {
@@ -154,8 +160,9 @@ test.describe("Admin tab - active users", () => {
   test.beforeEach(async ({ page }) => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page, [MOCK_ACTIVE_USER, MOCK_ADMIN_USER]);
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
+    // Wait for user list to be populated before each test
+    await expect(page.getByText("All Users (2)")).toBeVisible();
   });
 
   test("shows user count", async ({ page }) => {
@@ -169,49 +176,44 @@ test.describe("Admin tab - active users", () => {
   });
 
   test("shows USER badge for regular user", async ({ page }) => {
-    const aliceRow = page.locator("div").filter({ hasText: /alice@example\.com/ }).first();
-    await expect(aliceRow.getByText("USER")).toBeVisible();
+    // Use exact match to avoid matching "INVITE USER" or "All Users" case-insensitively
+    await expect(userRow(page, "alice@example.com").getByText("USER", { exact: true })).toBeVisible();
   });
 
   test("shows ADMIN badge for admin user", async ({ page }) => {
-    const bobRow = page.locator("div").filter({ hasText: /bob@example\.com/ }).first();
-    await expect(bobRow.getByText("ADMIN")).toBeVisible();
+    await expect(userRow(page, "bob@example.com").getByText("ADMIN", { exact: true })).toBeVisible();
   });
 
   test("Edit button opens inline edit form", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).first().click();
-    await expect(page.locator('input[placeholder="username"]')).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+    await userRow(page, "alice@example.com").getByRole("button", { name: "Edit" }).click();
+    await expect(userRow(page, "alice@example.com").locator('input[placeholder="username"]')).toBeVisible();
+    await expect(userRow(page, "alice@example.com").getByRole("button", { name: "Save", exact: true })).toBeVisible();
+    await expect(userRow(page, "alice@example.com").getByRole("button", { name: "Cancel" })).toBeVisible();
   });
 
   test("Cancel button closes inline edit form", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).first().click();
-    await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(page.locator('input[placeholder="username"]')).not.toBeVisible();
+    const row = userRow(page, "alice@example.com");
+    await row.getByRole("button", { name: "Edit" }).click();
+    await row.getByRole("button", { name: "Cancel" }).click();
+    await expect(row.locator('input[placeholder="username"]')).not.toBeVisible();
   });
 
   test("edit form prefills existing username", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).first().click();
-    const input = page.locator('input[placeholder="username"]');
-    await expect(input).toHaveValue("alice");
+    await userRow(page, "alice@example.com").getByRole("button", { name: "Edit" }).click();
+    await expect(
+      userRow(page, "alice@example.com").locator('input[placeholder="username"]')
+    ).toHaveValue("alice");
   });
 
   test("first delete click shows confirmation banner", async ({ page }) => {
-    const deleteBtn = page.locator('[title="Delete user"]').first();
-    await deleteBtn.click();
-    await expect(
-      page.getByText(/permanently deletes the account/i)
-    ).toBeVisible();
+    await userRow(page, "alice@example.com").locator('[title="Delete user"]').click();
+    await expect(page.getByText(/permanently deletes the account/i)).toBeVisible();
   });
 
   test("dismiss hides the confirmation banner", async ({ page }) => {
-    const deleteBtn = page.locator('[title="Delete user"]').first();
-    await deleteBtn.click();
+    await userRow(page, "alice@example.com").locator('[title="Delete user"]').click();
     await page.getByRole("button", { name: "Dismiss" }).click();
-    await expect(
-      page.getByText(/permanently deletes the account/i)
-    ).not.toBeVisible();
+    await expect(page.getByText(/permanently deletes the account/i)).not.toBeVisible();
   });
 });
 
@@ -223,19 +225,20 @@ test.describe("Admin tab - role toggle", () => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page, [MOCK_ACTIVE_USER]);
     await stubNextAction(page, {});
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
+    await expect(page.getByText("All Users (1)")).toBeVisible();
   });
 
   test("role toggle button is present for active user", async ({ page }) => {
-    await expect(
-      page.locator('[title="Make admin"]')
-    ).toBeVisible();
+    await expect(userRow(page, "alice@example.com").locator('[title="Make admin"]')).toBeVisible();
   });
 
   test("clicking role toggle changes badge to ADMIN", async ({ page }) => {
-    await page.locator('[title="Make admin"]').click();
-    await expect(page.getByText("ADMIN")).toBeVisible({ timeout: 5000 });
+    await userRow(page, "alice@example.com").locator('[title="Make admin"]').click();
+    // After mock returns {}, handleRoleToggle updates local state → badge changes
+    await expect(
+      userRow(page, "alice@example.com").getByText("ADMIN", { exact: true })
+    ).toBeVisible({ timeout: 5000 });
   });
 });
 
@@ -247,15 +250,15 @@ test.describe("Admin tab - edit username", () => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page, [MOCK_ACTIVE_USER]);
     await stubNextAction(page, {});
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
+    await expect(page.getByText("All Users (1)")).toBeVisible();
   });
 
   test("saving a new username updates the user row", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).first().click();
-    const input = page.locator('input[placeholder="username"]');
-    await input.fill("newname");
-    await page.getByRole("button", { name: "Save" }).click();
+    const row = userRow(page, "alice@example.com");
+    await row.getByRole("button", { name: "Edit" }).click();
+    await row.locator('input[placeholder="username"]').fill("newname");
+    await row.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("@newname")).toBeVisible({ timeout: 5000 });
   });
 });
@@ -268,15 +271,16 @@ test.describe("Admin tab - delete user", () => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page, [MOCK_ACTIVE_USER]);
     await stubNextAction(page, {});
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
+    await expect(page.getByText("All Users (1)")).toBeVisible();
   });
 
   test("confirming delete removes the user from the list", async ({ page }) => {
+    const row = userRow(page, "alice@example.com");
     // First click shows confirmation
-    await page.locator('[title="Delete user"]').click();
-    // Second click (now titled "Click again to confirm") executes delete
-    await page.locator('[title="Click again to confirm"]').click();
+    await row.locator('[title="Delete user"]').click();
+    // Second click (confirm) executes delete; mock returns {} so UI removes the row
+    await row.locator('[title="Click again to confirm"]').click();
     await expect(page.getByText("@alice")).not.toBeVisible({ timeout: 5000 });
   });
 });
@@ -289,12 +293,12 @@ test.describe("Admin tab - invited users", () => {
     if (!process.env.TEST_EMAIL) test.skip();
     await setupAdminPage(page, [MOCK_INVITED_USER]);
     await stubNextAction(page, {});
-    await page.goto("/profile");
-    await page.getByRole("button", { name: "Admin" }).click();
+    await gotoAdminTab(page);
+    await expect(page.getByText("All Users (1)")).toBeVisible();
   });
 
   test("invited user shows INVITED badge", async ({ page }) => {
-    await expect(page.getByText("INVITED")).toBeVisible();
+    await expect(userRow(page, "charlie@example.com").getByText("INVITED", { exact: true })).toBeVisible();
   });
 
   test("invited user shows Pending status", async ({ page }) => {
@@ -306,16 +310,12 @@ test.describe("Admin tab - invited users", () => {
   });
 
   test("invited user shows Cancel invite button", async ({ page }) => {
-    await expect(
-      page.getByRole("button", { name: /cancel invite/i })
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /cancel invite/i })).toBeVisible();
   });
 
   test("first cancel click shows confirmation banner for invite cancellation", async ({ page }) => {
     await page.getByRole("button", { name: /cancel invite/i }).click();
-    await expect(
-      page.getByText(/cancels the invite/i)
-    ).toBeVisible();
+    await expect(page.getByText(/cancels the invite/i)).toBeVisible();
   });
 
   test("dismiss hides cancel invite confirmation", async ({ page }) => {

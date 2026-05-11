@@ -27,11 +27,18 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState<AllProgress | null>(null);
-  const [initials, setInitials] = useState("");
+  // Read cached values instantly from localStorage — no flash on load
+  const [initials, setInitials] = useState(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("ph:initials") ?? "") : ""
+  );
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
-  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
-  const [profileAvatarColor, setProfileAvatarColor] = useState<string | null>(null);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("ph:avatarUrl") ?? null) : null
+  );
+  const [profileAvatarColor, setProfileAvatarColor] = useState<string | null>(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("ph:avatarColor") ?? null) : null
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -50,13 +57,23 @@ function HomeContent() {
         setInitials(session.user.email.slice(0, 2).toUpperCase());
       }
     });
-    // Then overwrite with nicer initials once profile loads
+    // Then overwrite with fresh profile data and persist to localStorage
     loadProfile().then((p) => {
       const name = p.display_name || p.username || "";
+      const newInitials = name
+        ? name.slice(0, 2).toUpperCase()
+        : (p.avatar_url ? initials : ""); // keep email-seeded if no name yet
+      const avatarUrl = p.avatar_url ?? null;
+      const avatarColor = p.avatar_color ?? "amber";
       setProfileName(name);
-      setProfileAvatarUrl(p.avatar_url ?? null);
-      setProfileAvatarColor(p.avatar_color ?? "amber");
-      if (name) setInitials(name.slice(0, 2).toUpperCase());
+      setProfileAvatarUrl(avatarUrl);
+      setProfileAvatarColor(avatarColor);
+      if (newInitials) setInitials(newInitials);
+      // Cache so next load is instant
+      localStorage.setItem("ph:initials", newInitials || initials);
+      if (avatarUrl) localStorage.setItem("ph:avatarUrl", avatarUrl);
+      else localStorage.removeItem("ph:avatarUrl");
+      localStorage.setItem("ph:avatarColor", avatarColor);
     });
   }, []);
 

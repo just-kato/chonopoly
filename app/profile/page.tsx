@@ -11,6 +11,7 @@ import { logout } from "@/app/login/actions";
 import AdminTab from "@/components/AdminTab";
 import AvatarEditor from "@/components/AvatarEditor";
 import { getAvatarColors } from "@/lib/avatar";
+import { readProfileCache, writeProfileCache } from "@/lib/profile-cache";
 
 type PageTab = "Profile" | "Courses" | "Admin";
 
@@ -49,16 +50,23 @@ function ProfileContent() {
   const activeTab: PageTab = tabParam === "Courses" || tabParam === "Admin" ? tabParam : "Profile";
   function setTab(t: PageTab) { router.replace(`/profile?tab=${t}`, { scroll: false }); }
 
-  const [email, setEmail] = useState("");
+  const _cache = readProfileCache();
+
+  const [email, setEmail] = useState(_cache?.email ?? "");
   const [profile, setProfile] = useState<Profile>({
-    username: null, display_name: null, last_chapter_id: null,
-    last_tab_slug: null, role: "user", avatar_url: null, avatar_color: "amber",
+    username: null,
+    display_name: null,
+    last_chapter_id: null,
+    last_tab_slug: null,
+    role: (_cache?.role ?? "user") as "admin" | "user",
+    avatar_url: _cache?.avatarUrl ?? null,
+    avatar_color: _cache?.avatarColor ?? "amber",
   });
   const [progress, setProgress] = useState<AllProgress>({});
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [avatarColor, setAvatarColor] = useState("amber");
+  const [username, setUsername] = useState(_cache?.name?.startsWith("@") ? _cache.name.slice(1) : "");
+  const [displayName, setDisplayName] = useState(_cache?.name ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(_cache?.avatarUrl ?? null);
+  const [avatarColor, setAvatarColor] = useState(_cache?.avatarColor ?? "amber");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ text: string; error: boolean } | null>(null);
@@ -76,13 +84,25 @@ function ProfileContent() {
       loadProfile(),
       loadAllProgress(),
     ]).then(([{ data: { user } }, p, progressData]) => {
-      setEmail(user?.email ?? "");
+      const userEmail = user?.email ?? "";
+      const name = p.display_name || p.username || "";
+      const avatarUrl = p.avatar_url ?? null;
+      const avatarColor = p.avatar_color ?? "amber";
+      setEmail(userEmail);
       setUsername(p.username ?? "");
       setDisplayName(p.display_name ?? "");
-      setAvatarUrl(p.avatar_url ?? null);
-      setAvatarColor(p.avatar_color ?? "amber");
+      setAvatarUrl(avatarUrl);
+      setAvatarColor(avatarColor);
       setProfile(p);
       setProgress(progressData);
+      writeProfileCache({
+        email: userEmail,
+        name,
+        role: p.role,
+        initials: name ? name.slice(0, 2).toUpperCase() : userEmail.slice(0, 2).toUpperCase(),
+        avatarUrl,
+        avatarColor,
+      });
     });
   }, []);
 
@@ -101,16 +121,19 @@ function ProfileContent() {
     if (result.error) { flash(result.error, true); return; }
     setAvatarUrl(result.url ?? null);
     await updateProfile({ avatarUrl: result.url });
+    writeProfileCache({ avatarUrl: result.url ?? null });
   }
 
   async function handleColorChange(color: string) {
     setAvatarColor(color);
     await updateProfile({ avatarColor: color });
+    writeProfileCache({ avatarColor: color });
   }
 
   async function handleAvatarRemove() {
     setAvatarUrl(null);
     await updateProfile({ avatarUrl: null });
+    writeProfileCache({ avatarUrl: null });
   }
 
   const completedCount = chapters.filter((ch) => {

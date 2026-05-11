@@ -40,7 +40,7 @@ function InvitedBadge() {
   );
 }
 
-type EditState = { userId: string; display_name: string; username: string } | null;
+type EditState = { userId: string; username: string } | null;
 
 export default function AdminTab() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -95,7 +95,6 @@ export default function AdminTab() {
     setEditSaving(true);
     setEditError(null);
     const result = await updateUserProfile(editState.userId, {
-      display_name: editState.display_name || undefined,
       username: editState.username || undefined,
     });
     setEditSaving(false);
@@ -103,7 +102,7 @@ export default function AdminTab() {
     setUsers((prev) =>
       prev.map((u) =>
         u.id === editState.userId
-          ? { ...u, display_name: editState.display_name || null, username: editState.username || null }
+          ? { ...u, username: editState.username || null }
           : u
       )
     );
@@ -181,15 +180,12 @@ export default function AdminTab() {
             >
               {/* User row */}
               <div className="flex items-center gap-3 px-4 py-3.5">
-                <Avatar name={user.display_name} email={user.email} />
+                <Avatar name={user.username} email={user.email} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-sm font-medium truncate ${user.invited ? "text-[#7a7870]" : "text-white"}`}>
-                      {user.display_name || user.username || (user.invited ? "Pending…" : "—")}
+                      {user.username ? `@${user.username}` : (user.invited ? "Pending…" : user.email)}
                     </span>
-                    {user.username && (
-                      <span className="text-xs text-[#7a7870]">@{user.username}</span>
-                    )}
                     {user.invited ? <InvitedBadge /> : <RoleBadge role={user.role} />}
                   </div>
                   <p className="text-xs text-[#7a7870] truncate">{user.email}</p>
@@ -228,7 +224,6 @@ export default function AdminTab() {
                         onClick={() =>
                           setEditState({
                             userId: user.id,
-                            display_name: user.display_name ?? "",
                             username: user.username ?? "",
                           })
                         }
@@ -280,14 +275,6 @@ export default function AdminTab() {
               {editState?.userId === user.id && (
                 <div className="px-4 py-4 border-t border-[#2e2e38] flex flex-col gap-3 bg-[#0f0f11]">
                   <div className="flex gap-2">
-                    <input
-                      value={editState.display_name}
-                      onChange={(e) =>
-                        setEditState((s) => s && { ...s, display_name: e.target.value })
-                      }
-                      placeholder="Display name"
-                      className="flex-1 bg-[#18181c] border border-[#2e2e38] rounded-lg px-3 py-2 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
-                    />
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7a7870] text-sm select-none">@</span>
                       <input

@@ -14,6 +14,7 @@ import {
 import { saveLastPosition, loadProfile } from "@/lib/supabase/profile";
 import { createClient } from "@/lib/supabase/client";
 import ProfileDropdown from "@/components/ProfileDropdown";
+import { readProfileCache, writeProfileCache } from "@/lib/profile-cache";
 
 export default function Home() {
   return (
@@ -27,6 +28,7 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState<AllProgress | null>(null);
+  // All start empty — matches server render, no hydration mismatch
   const [initials, setInitials] = useState("");
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
@@ -40,19 +42,32 @@ function HomeContent() {
 
   useEffect(() => {
     const supabase = createClient();
-    // getSession reads from local cache — no network call, resolves immediately
+    let sessionEmail = "";
+
+    // getSession reads Supabase's local token — near-instant
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setProfileEmail(session.user.email);
-        // Seed initials from email right away so "?" never shows
-        setInitials(session.user.email.slice(0, 2).toUpperCase());
+      sessionEmail = session?.user?.email ?? "";
+      setProfileEmail(sessionEmail);
+
+      // Apply cache if it belongs to this user (cache cleared on login)
+      const cached = readProfileCache();
+      if (cached?.email === sessionEmail) {
+        setInitials(cached.initials);
+        setProfileName(cached.username ? `@${cached.username}` : "");
+      } else if (sessionEmail) {
+        setInitials(sessionEmail.slice(0, 2).toUpperCase());
       }
-    });
-    // Then overwrite with nicer initials once profile loads
-    loadProfile().then((p) => {
-      const name = p.display_name || p.username || "";
-      setProfileName(name);
-      if (name) setInitials(name.slice(0, 2).toUpperCase());
+
+      // Load fresh profile and refresh cache for next visit
+      loadProfile().then((p) => {
+        const username = p.username ?? "";
+        const newInitials = username
+          ? username.slice(0, 2).toUpperCase()
+          : sessionEmail.slice(0, 2).toUpperCase();
+        setProfileName(username ? `@${username}` : "");
+        if (newInitials) setInitials(newInitials);
+        writeProfileCache({ username, email: sessionEmail, initials: newInitials, role: p.role });
+      });
     });
   }, []);
 

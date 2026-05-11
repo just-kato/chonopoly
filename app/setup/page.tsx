@@ -26,7 +26,6 @@ function SetupContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
 
   const [saving, setSaving] = useState(false);
@@ -100,10 +99,10 @@ function SetupContent() {
       return;
     }
 
-    const result = await updateProfile({
-      displayName: displayName.trim() || null,
-      username: username.trim() || null,
-    });
+    // Generate a username if the user left it blank
+    const finalUsername = username.trim() || `user_${Math.random().toString(36).slice(2, 8)}`;
+
+    const result = await updateProfile({ username: finalUsername });
 
     setSaving(false);
     if (result.error) {
@@ -222,23 +221,10 @@ function SetupContent() {
             <div className="border-t border-[#2e2e38] pt-5">
               <p className="text-xs font-mono text-amber-400 tracking-widest mb-4">YOUR DETAILS</p>
 
-              {/* Display name */}
-              <div className="flex flex-col gap-1.5 mb-4">
-                <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                  Display Name <span className="normal-case text-[#4a4a55]">(optional)</span>
-                </label>
-                <input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Your name"
-                  className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
-                />
-              </div>
-
               {/* Username */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                  Username <span className="normal-case text-[#4a4a55]">(optional)</span>
+                  Username <span className="normal-case text-[#4a4a55]">(optional — one will be generated if left blank)</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7a7870] text-sm select-none">@</span>

@@ -1,10 +1,12 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { login, forgotPassword } from "./actions";
+import { clearProfileCache } from "@/lib/profile-cache";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "forgot" | "sent">("login");
+  useEffect(() => { clearProfileCache(); }, []);
   const [showPassword, setShowPassword] = useState(false);
 
   const [loginError, loginAction, loginPending] = useActionState(login, undefined);

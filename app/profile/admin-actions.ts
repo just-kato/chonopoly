@@ -7,7 +7,6 @@ export type UserRow = {
   id: string;
   email: string;
   username: string | null;
-  display_name: string | null;
   role: "admin" | "user";
   created_at: string;
   invited: boolean;
@@ -41,7 +40,7 @@ export async function listUsers(): Promise<UserRow[]> {
 
   const [{ data: authData }, { data: profiles }] = await Promise.all([
     admin.auth.admin.listUsers({ perPage: 1000 }),
-    admin.from("profiles").select("id, username, display_name, role"),
+    admin.from("profiles").select("id, username, role"),
   ]);
 
   const profileMap = new Map(
@@ -54,7 +53,6 @@ export async function listUsers(): Promise<UserRow[]> {
       id: u.id,
       email: u.email ?? "",
       username: profileMap.get(u.id)?.username ?? null,
-      display_name: profileMap.get(u.id)?.display_name ?? null,
       role: (profileMap.get(u.id)?.role ?? "user") as "admin" | "user",
       created_at: u.created_at,
       // invited_at is set for email invites; treat as pending until email is confirmed
@@ -81,7 +79,7 @@ export async function updateUserRole(
 
 export async function updateUserProfile(
   userId: string,
-  fields: { display_name?: string; username?: string }
+  fields: { username?: string }
 ): Promise<{ error?: string }> {
   await assertAdmin();
   const admin = serviceClient();

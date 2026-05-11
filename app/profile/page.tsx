@@ -1,14 +1,15 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Camera, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import chapters from "@/data";
 import { loadAllProgress, isChapterComplete, type AllProgress } from "@/lib/supabase/progress";
-import { loadProfile, updateProfile, type Profile } from "@/lib/supabase/profile";
+import { loadProfile, updateProfile, uploadAvatar, type Profile } from "@/lib/supabase/profile";
 import { logout } from "@/app/login/actions";
 import AdminTab from "@/components/AdminTab";
+import { AVATAR_COLORS, getAvatarColors } from "@/lib/avatar";
 
 type PageTab = "Profile" | "Courses" | "Admin";
 
@@ -72,12 +73,18 @@ function ProfileContent() {
     last_chapter_id: null,
     last_tab_slug: null,
     role: "user",
+    avatar_url: null,
+    avatar_color: "amber",
   });
   const [progress, setProgress] = useState<AllProgress>({});
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarColor, setAvatarColor] = useState("amber");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ text: string; error: boolean } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -88,6 +95,8 @@ function ProfileContent() {
       setEmail(user?.email ?? "");
       setUsername(profileData.username ?? "");
       setDisplayName(profileData.display_name ?? "");
+      setAvatarUrl(profileData.avatar_url ?? null);
+      setAvatarColor(profileData.avatar_color ?? "amber");
       setProfile(profileData);
       setProgress(progressData);
     });
@@ -108,6 +117,34 @@ function ProfileContent() {
     setTimeout(() => setSaveMsg(null), 3000);
   }
 
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setSaveMsg({ text: "Image must be under 2MB.", error: true });
+      setTimeout(() => setSaveMsg(null), 3000);
+      return;
+    }
+    setAvatarUploading(true);
+    const result = await uploadAvatar(file);
+    setAvatarUploading(false);
+    if (result.error) {
+      setSaveMsg({ text: result.error, error: true });
+      setTimeout(() => setSaveMsg(null), 3000);
+      return;
+    }
+    setAvatarUrl(result.url ?? null);
+    await updateProfile({ avatarUrl: result.url });
+    setSaveMsg({ text: "Avatar updated.", error: false });
+    setTimeout(() => setSaveMsg(null), 3000);
+    e.target.value = "";
+  }
+
+  async function handleColorChange(color: string) {
+    setAvatarColor(color);
+    await updateProfile({ avatarColor: color });
+  }
+
   const completedCount = chapters.filter((ch) => {
     const p = progress[ch.id];
     return p && isChapterComplete(p);
@@ -120,6 +157,7 @@ function ProfileContent() {
 
   const isAdmin = profile.role === "admin";
   const initials = (displayName || username || email || "?").slice(0, 2).toUpperCase();
+  const c = getAvatarColors(avatarColor);
 
   const groups: Record<string, typeof chapters> = {};
   chapters.forEach((ch) => {
@@ -143,8 +181,11 @@ function ProfileContent() {
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-8 md:py-10">
         {/* Avatar + identity */}
         <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 rounded-full bg-amber-400/20 border border-amber-400/30 flex items-center justify-center shrink-0">
-            <span className="text-amber-400 font-mono font-bold text-lg">{initials}</span>
+          <div className={`w-14 h-14 rounded-full ${c.bg} border ${c.border} flex items-center justify-center shrink-0 overflow-hidden`}>
+            {avatarUrl
+              ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              : <span className={`${c.text} font-mono font-bold text-lg`}>{initials}</span>
+            }
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -185,6 +226,45 @@ function ProfileContent() {
         {/* — Profile tab — */}
         {activeTab === "Profile" && (
           <div className="flex flex-col gap-5">
+
+            {/* Avatar editor */}
+            <div className="flex flex-col items-center gap-3 pb-5 border-b border-[#2e2e38]">
+              <div
+                className="relative group cursor-pointer"
+                onClick={() => !avatarUploading && fileInputRef.current?.click()}
+              >
+                <div className={`w-20 h-20 rounded-full ${c.bg} border-2 ${c.border} flex items-center justify-center overflow-hidden`}>
+                  {avatarUrl
+                    ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                    : <span className={`${c.text} font-mono font-bold text-2xl`}>{initials}</span>
+                  }
+                </div>
+                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {avatarUploading
+                    ? <Loader2 size={18} className="text-white animate-spin" />
+                    : <Camera size={18} className="text-white" />
+                  }
+                </div>
+              </div>
+              <p className="text-[#4a4a55] text-xs">Click to upload a photo · max 2MB</p>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+
+              {/* Color swatches */}
+              <div className="flex items-center gap-2">
+                {Object.entries(AVATAR_COLORS).map(([key, colors]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    title={key}
+                    onClick={() => handleColorChange(key)}
+                    className={`w-6 h-6 rounded-full ${colors.swatch} transition-transform hover:scale-110 ${
+                      avatarColor === key ? "ring-2 ring-offset-2 ring-offset-[#0f0f11] ring-white scale-110" : ""
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
                 Email

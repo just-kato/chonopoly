@@ -144,14 +144,12 @@ export default function ChapterView({
             </div>
           )}
 
-          {/* PRACTICE QUESTIONS */}
-          {tab === "Practice Questions" && (
-            <div>
-              <h2 className="font-serif text-xl md:text-2xl font-bold text-white mb-1">Practice Questions</h2>
-              <p className="text-[#7a7870] text-sm border-b border-[#2e2e38] pb-4 mb-6">Select an answer to reveal the explanation</p>
-              <Quiz questions={chapter.practiceQuestions} onComplete={onQuizComplete} onNextChapter={onNextChapter} />
-            </div>
-          )}
+          {/* PRACTICE QUESTIONS — always mounted so selected answers survive tab switches */}
+          <div className={tab !== "Practice Questions" ? "hidden" : ""}>
+            <h2 className="font-serif text-xl md:text-2xl font-bold text-white mb-1">Practice Questions</h2>
+            <p className="text-[#7a7870] text-sm border-b border-[#2e2e38] pb-4 mb-6">Select an answer to reveal the explanation</p>
+            <Quiz questions={chapter.practiceQuestions} onComplete={onQuizComplete} onNextChapter={onNextChapter} />
+          </div>
 
           {/* QUICK REFERENCE */}
           {tab === "Quick Reference" && (

@@ -3,7 +3,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { updateProfile } from "@/lib/supabase/profile";
+import { updateProfile, uploadAvatar } from "@/lib/supabase/profile";
+import AvatarEditor from "@/components/AvatarEditor";
 
 export default function SetupPage() {
   return (
@@ -28,6 +29,9 @@ function SetupContent() {
 
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarColor, setAvatarColor] = useState("amber");
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -103,6 +107,8 @@ function SetupContent() {
     const result = await updateProfile({
       displayName: displayName.trim() || null,
       username: username.trim() || null,
+      avatarUrl: avatarUrl || null,
+      avatarColor: avatarColor || "amber",
     });
 
     setSaving(false);
@@ -114,6 +120,18 @@ function SetupContent() {
     setStatus("done");
     setTimeout(() => router.replace("/"), 1500);
   }
+
+  async function handleAvatarUpload(file: File) {
+    if (file.size > 2 * 1024 * 1024) { setSubmitError("Image must be under 2MB."); return; }
+    setAvatarUploading(true);
+    const result = await uploadAvatar(file);
+    setAvatarUploading(false);
+    if (result.error) { setSubmitError(result.error); return; }
+    setAvatarUrl(result.url ?? null);
+    setSubmitError("");
+  }
+
+  const initials = (displayName || email || "?").slice(0, 2).toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#0f0f11] flex items-center justify-center px-4 py-10">
@@ -221,6 +239,24 @@ function SetupContent() {
 
             <div className="border-t border-[#2e2e38] pt-5">
               <p className="text-xs font-mono text-amber-400 tracking-widest mb-4">YOUR DETAILS</p>
+
+              {/* Avatar picker */}
+              <div className="flex items-center gap-3 mb-5">
+                <AvatarEditor
+                  initials={initials}
+                  avatarUrl={avatarUrl}
+                  avatarColor={avatarColor}
+                  uploading={avatarUploading}
+                  size="md"
+                  onColorChange={(c) => setAvatarColor(c)}
+                  onUpload={handleAvatarUpload}
+                  onRemove={() => setAvatarUrl(null)}
+                />
+                <div>
+                  <p className="text-sm text-[#c8c5bc]">Avatar</p>
+                  <p className="text-xs text-[#4a4a55]">Optional — click to customize</p>
+                </div>
+              </div>
 
               {/* Display name */}
               <div className="flex flex-col gap-1.5 mb-4">

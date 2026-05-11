@@ -30,6 +30,8 @@ function HomeContent() {
   const [initials, setInitials] = useState("");
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+  const [profileAvatarColor, setProfileAvatarColor] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -52,6 +54,8 @@ function HomeContent() {
     loadProfile().then((p) => {
       const name = p.display_name || p.username || "";
       setProfileName(name);
+      setProfileAvatarUrl(p.avatar_url ?? null);
+      setProfileAvatarColor(p.avatar_color ?? "amber");
       if (name) setInitials(name.slice(0, 2).toUpperCase());
     });
   }, []);
@@ -139,7 +143,13 @@ function HomeContent() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <ProfileDropdown initials={initials} name={profileName} email={profileEmail} />
+      <ProfileDropdown
+        initials={initials}
+        name={profileName}
+        email={profileEmail}
+        avatarUrl={profileAvatarUrl}
+        avatarColor={profileAvatarColor}
+      />
 
       <Sidebar
         chapters={chapters}

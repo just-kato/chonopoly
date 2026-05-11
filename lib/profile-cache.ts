@@ -10,6 +10,8 @@ export interface CachedProfile {
   username: string;
   email: string;
   role: "admin" | "user";
+  avatarUrl: string | null;
+  avatarColor: string;
 }
 
 export function readProfileCache(): CachedProfile | null {

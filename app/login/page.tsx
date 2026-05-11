@@ -6,6 +6,8 @@ import { clearProfileCache } from "@/lib/profile-cache";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "forgot" | "sent">("login");
+
+  // Arriving at /login means the user signed out — clear stale profile data
   useEffect(() => { clearProfileCache(); }, []);
   const [showPassword, setShowPassword] = useState(false);
 

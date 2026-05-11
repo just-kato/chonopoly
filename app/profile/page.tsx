@@ -6,9 +6,11 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import chapters from "@/data";
 import { loadAllProgress, isChapterComplete, type AllProgress } from "@/lib/supabase/progress";
-import { loadProfile, updateProfile, type Profile } from "@/lib/supabase/profile";
+import { loadProfile, updateProfile, uploadAvatar, type Profile } from "@/lib/supabase/profile";
 import { logout } from "@/app/login/actions";
 import AdminTab from "@/components/AdminTab";
+import AvatarEditor from "@/components/AvatarEditor";
+import { getAvatarColors } from "@/lib/avatar";
 import { readProfileCache, writeProfileCache } from "@/lib/profile-cache";
 
 type PageTab = "Profile" | "Courses" | "Admin";
@@ -48,18 +50,22 @@ function ProfileContent() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
-  const [profile, setProfile] = useState<Profile>({ username: null, last_chapter_id: null, last_tab_slug: null, role: "user" });
+  const [profile, setProfile] = useState<Profile>({ username: null, last_chapter_id: null, last_tab_slug: null, role: "user", avatar_url: null, avatar_color: "amber" });
   const [progress, setProgress] = useState<AllProgress>({});
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarColor, setAvatarColor] = useState("amber");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ text: string; error: boolean } | null>(null);
 
   useEffect(() => {
-    // Apply cache for instant role badge and identity (no flash)
     const cached = readProfileCache();
     if (cached) {
       setEmail(cached.email);
       setUsername(cached.username);
       setRole(cached.role);
+      setAvatarUrl(cached.avatarUrl);
+      setAvatarColor(cached.avatarColor);
     }
 
     Promise.all([
@@ -69,16 +75,22 @@ function ProfileContent() {
     ]).then(([{ data: { user } }, p, progressData]) => {
       const userEmail = user?.email ?? "";
       const uname = p.username ?? "";
+      const url = p.avatar_url ?? null;
+      const color = p.avatar_color ?? "amber";
       setEmail(userEmail);
       setUsername(uname);
       setRole(p.role);
       setProfile(p);
+      setAvatarUrl(url);
+      setAvatarColor(color);
       setProgress(progressData);
       writeProfileCache({
         email: userEmail,
         username: uname,
         role: p.role,
         initials: uname ? uname.slice(0, 2).toUpperCase() : userEmail.slice(0, 2).toUpperCase(),
+        avatarUrl: url,
+        avatarColor: color,
       });
     });
   }, []);
@@ -96,9 +108,33 @@ function ProfileContent() {
         username,
         role,
         initials: username ? username.slice(0, 2).toUpperCase() : email.slice(0, 2).toUpperCase(),
+        avatarUrl,
+        avatarColor,
       });
     }
     setTimeout(() => setSaveMsg(null), 3000);
+  }
+
+  async function handleAvatarUpload(file: File) {
+    setAvatarUploading(true);
+    const { url, error } = await uploadAvatar(file);
+    if (error || !url) { setAvatarUploading(false); return; }
+    await updateProfile({ avatarUrl: url });
+    setAvatarUrl(url);
+    setAvatarUploading(false);
+    writeProfileCache({ email, username, role, initials, avatarUrl: url, avatarColor });
+  }
+
+  async function handleColorChange(color: string) {
+    setAvatarColor(color);
+    await updateProfile({ avatarColor: color });
+    writeProfileCache({ email, username, role, initials, avatarUrl, avatarColor: color });
+  }
+
+  async function handleAvatarRemove() {
+    await updateProfile({ avatarUrl: null });
+    setAvatarUrl(null);
+    writeProfileCache({ email, username, role, initials, avatarUrl: null, avatarColor });
   }
 
   const isAdmin = role === "admin";
@@ -132,9 +168,16 @@ function ProfileContent() {
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-8 md:py-10">
         {/* Identity header */}
         <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 rounded-full bg-amber-400/20 border border-amber-400/30 flex items-center justify-center shrink-0">
-            <span className="text-amber-400 font-mono font-bold text-lg">{initials}</span>
-          </div>
+          <AvatarEditor
+            initials={initials}
+            avatarUrl={avatarUrl}
+            avatarColor={avatarColor}
+            uploading={avatarUploading}
+            size="md"
+            onColorChange={handleColorChange}
+            onUpload={handleAvatarUpload}
+            onRemove={handleAvatarRemove}
+          />
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-white font-serif text-xl font-bold leading-tight">

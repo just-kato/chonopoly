@@ -28,10 +28,11 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState<AllProgress | null>(null);
-  // All start empty — matches server render, no hydration mismatch
   const [initials, setInitials] = useState("");
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+  const [profileAvatarColor, setProfileAvatarColor] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -41,33 +42,33 @@ function HomeContent() {
   const activeChapter = chapters.find((c) => c.id === chapterId) ?? chapters[0];
 
   useEffect(() => {
+    const cached = readProfileCache();
+    if (cached) {
+      setInitials(cached.initials);
+      setProfileName(cached.username);
+      setProfileEmail(cached.email);
+      setProfileAvatarUrl(cached.avatarUrl);
+      setProfileAvatarColor(cached.avatarColor);
+    }
+
     const supabase = createClient();
-    let sessionEmail = "";
-
-    // getSession reads Supabase's local token — near-instant
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      sessionEmail = session?.user?.email ?? "";
-      setProfileEmail(sessionEmail);
-
-      // Apply cache if it belongs to this user (cache cleared on login)
-      const cached = readProfileCache();
-      if (cached?.email === sessionEmail) {
-        setInitials(cached.initials);
-        setProfileName(cached.username ? `@${cached.username}` : "");
-      } else if (sessionEmail) {
-        setInitials(sessionEmail.slice(0, 2).toUpperCase());
-      }
-
-      // Load fresh profile and refresh cache for next visit
-      loadProfile().then((p) => {
-        const username = p.username ?? "";
-        const newInitials = username
-          ? username.slice(0, 2).toUpperCase()
-          : sessionEmail.slice(0, 2).toUpperCase();
-        setProfileName(username ? `@${username}` : "");
-        if (newInitials) setInitials(newInitials);
-        writeProfileCache({ username, email: sessionEmail, initials: newInitials, role: p.role });
-      });
+    Promise.all([
+      supabase.auth.getSession(),
+      loadProfile(),
+    ]).then(([{ data: { session } }, p]) => {
+      const email = session?.user?.email ?? "";
+      const name = p.username || "";
+      const avatarUrl = p.avatar_url ?? null;
+      const avatarColor = p.avatar_color ?? "amber";
+      const newInitials = name
+        ? name.slice(0, 2).toUpperCase()
+        : email.slice(0, 2).toUpperCase();
+      if (email) setProfileEmail(email);
+      setProfileName(name);
+      setProfileAvatarUrl(avatarUrl);
+      setProfileAvatarColor(avatarColor);
+      if (newInitials) setInitials(newInitials);
+      writeProfileCache({ username: name, avatarUrl, avatarColor, initials: newInitials, role: p.role, email });
     });
   }, []);
 
@@ -154,7 +155,13 @@ function HomeContent() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <ProfileDropdown initials={initials} name={profileName} email={profileEmail} />
+      <ProfileDropdown
+        initials={initials}
+        name={profileName}
+        email={profileEmail}
+        avatarUrl={profileAvatarUrl}
+        avatarColor={profileAvatarColor}
+      />
 
       <Sidebar
         chapters={chapters}

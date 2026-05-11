@@ -3,7 +3,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { updateProfile } from "@/lib/supabase/profile";
+import { updateProfile, uploadAvatar } from "@/lib/supabase/profile";
+import AvatarEditor from "@/components/AvatarEditor";
 
 export default function SetupPage() {
   return (
@@ -27,6 +28,9 @@ function SetupContent() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [username, setUsername] = useState("");
+  const [avatarColor, setAvatarColor] = useState("amber");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -76,6 +80,13 @@ function SetupContent() {
     };
   }, []);
 
+  async function handleAvatarUpload(file: File) {
+    setAvatarUploading(true);
+    const { url } = await uploadAvatar(file);
+    if (url) setAvatarUrl(url);
+    setAvatarUploading(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -99,10 +110,13 @@ function SetupContent() {
       return;
     }
 
-    // Generate a username if the user left it blank
     const finalUsername = username.trim() || `user_${Math.random().toString(36).slice(2, 8)}`;
 
-    const result = await updateProfile({ username: finalUsername });
+    const result = await updateProfile({
+      username: finalUsername,
+      avatarColor,
+      ...(avatarUrl ? { avatarUrl } : {}),
+    });
 
     setSaving(false);
     if (result.error) {
@@ -220,6 +234,20 @@ function SetupContent() {
 
             <div className="border-t border-[#2e2e38] pt-5">
               <p className="text-xs font-mono text-amber-400 tracking-widest mb-4">YOUR DETAILS</p>
+
+              {/* Avatar */}
+              <div className="flex flex-col gap-1.5 mb-5">
+                <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">Avatar</label>
+                <AvatarEditor
+                  initials={(username || email || "?").slice(0, 2).toUpperCase()}
+                  avatarUrl={avatarUrl}
+                  avatarColor={avatarColor}
+                  uploading={avatarUploading}
+                  size="lg"
+                  onColorChange={setAvatarColor}
+                  onUpload={handleAvatarUpload}
+                />
+              </div>
 
               {/* Username */}
               <div className="flex flex-col gap-1.5">

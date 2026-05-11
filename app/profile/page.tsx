@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import chapters from "@/data";
@@ -10,6 +11,14 @@ import { logout } from "@/app/login/actions";
 import AdminTab from "@/components/AdminTab";
 
 type PageTab = "Profile" | "Courses" | "Admin";
+
+export default function ProfilePage() {
+  return (
+    <Suspense>
+      <ProfileContent />
+    </Suspense>
+  );
+}
 
 function ProgressCircle({ pct }: { pct: number }) {
   const r = 36;
@@ -45,8 +54,17 @@ function ProgressCircle({ pct }: { pct: number }) {
   );
 }
 
-export default function ProfilePage() {
-  const [tab, setTab] = useState<PageTab>("Profile");
+function ProfileContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const tabParam = searchParams.get("tab");
+  const activeTab: PageTab =
+    tabParam === "Courses" || tabParam === "Admin" ? tabParam : "Profile";
+
+  function setTab(t: PageTab) {
+    router.replace(`/profile?tab=${t}`, { scroll: false });
+  }
   const [email, setEmail] = useState("");
   const [profile, setProfile] = useState<Profile>({
     username: null,
@@ -154,7 +172,7 @@ export default function ProfilePage() {
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === t
+                activeTab === t
                   ? "text-amber-400 border-amber-400"
                   : "text-[#7a7870] border-transparent hover:text-[#e8e6df]"
               }`}
@@ -165,7 +183,7 @@ export default function ProfilePage() {
         </div>
 
         {/* — Profile tab — */}
-        {tab === "Profile" && (
+        {activeTab === "Profile" && (
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
@@ -242,10 +260,10 @@ export default function ProfilePage() {
         )}
 
         {/* — Admin tab — */}
-        {tab === "Admin" && isAdmin && <AdminTab />}
+        {activeTab === "Admin" && isAdmin && <AdminTab />}
 
         {/* — Courses tab — */}
-        {tab === "Courses" && (
+        {activeTab === "Courses" && (
           <div>
             {/* Course card */}
             <div className="bg-[#18181c] border border-[#2e2e38] rounded-xl p-6 mb-8">

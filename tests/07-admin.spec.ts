@@ -71,10 +71,11 @@ async function setupAdminPage(page: Page, users: object[] = []) {
   }, users);
 }
 
-// Intercept the Next.js server action POST (any URL matching /profile path)
-// and return a stubbed RSC success payload so state-changing actions resolve.
+// Intercept the Next.js server action POST (localhost /profile, any query string).
+// Uses a regex to avoid matching the Supabase REST endpoint /rest/v1/profiles
+// which would break the profile admin stub registered in setupAdminPage.
 async function stubNextAction(page: Page, returnValue: unknown = {}) {
-  await page.route("**/profile*", async (route, request) => {
+  await page.route(/localhost:\d+\/profile(\?.*)?$/, async (route, request) => {
     if (request.method() === "POST" && request.headers()["next-action"]) {
       await route.fulfill({
         status: 200,

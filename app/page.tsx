@@ -14,6 +14,7 @@ import {
 import { saveLastPosition, loadProfile } from "@/lib/supabase/profile";
 import { createClient } from "@/lib/supabase/client";
 import ProfileDropdown from "@/components/ProfileDropdown";
+import { readProfileCache, writeProfileCache } from "@/lib/profile-cache";
 
 export default function Home() {
   return (
@@ -30,6 +31,8 @@ function HomeContent() {
   const [initials, setInitials] = useState("");
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+  const [profileAvatarColor, setProfileAvatarColor] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -39,20 +42,33 @@ function HomeContent() {
   const activeChapter = chapters.find((c) => c.id === chapterId) ?? chapters[0];
 
   useEffect(() => {
+    const cached = readProfileCache();
+    if (cached) {
+      setInitials(cached.initials);
+      setProfileName(cached.username);
+      setProfileEmail(cached.email);
+      setProfileAvatarUrl(cached.avatarUrl);
+      setProfileAvatarColor(cached.avatarColor);
+    }
+
     const supabase = createClient();
-    // getSession reads from local cache — no network call, resolves immediately
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setProfileEmail(session.user.email);
-        // Seed initials from email right away so "?" never shows
-        setInitials(session.user.email.slice(0, 2).toUpperCase());
-      }
-    });
-    // Then overwrite with nicer initials once profile loads
-    loadProfile().then((p) => {
-      const name = p.display_name || p.username || "";
+    Promise.all([
+      supabase.auth.getSession(),
+      loadProfile(),
+    ]).then(([{ data: { session } }, p]) => {
+      const email = session?.user?.email ?? "";
+      const name = p.username || "";
+      const avatarUrl = p.avatar_url ?? null;
+      const avatarColor = p.avatar_color ?? "amber";
+      const newInitials = name
+        ? name.slice(0, 2).toUpperCase()
+        : email.slice(0, 2).toUpperCase();
+      if (email) setProfileEmail(email);
       setProfileName(name);
-      if (name) setInitials(name.slice(0, 2).toUpperCase());
+      setProfileAvatarUrl(avatarUrl);
+      setProfileAvatarColor(avatarColor);
+      if (newInitials) setInitials(newInitials);
+      writeProfileCache({ username: name, avatarUrl, avatarColor, initials: newInitials, role: p.role, email });
     });
   }, []);
 
@@ -139,7 +155,13 @@ function HomeContent() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <ProfileDropdown initials={initials} name={profileName} email={profileEmail} />
+      <ProfileDropdown
+        initials={initials}
+        name={profileName}
+        email={profileEmail}
+        avatarUrl={profileAvatarUrl}
+        avatarColor={profileAvatarColor}
+      />
 
       <Sidebar
         chapters={chapters}

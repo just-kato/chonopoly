@@ -3,7 +3,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { updateProfile } from "@/lib/supabase/profile";
+import { updateProfile, uploadAvatar } from "@/lib/supabase/profile";
+import AvatarEditor from "@/components/AvatarEditor";
 
 export default function SetupPage() {
   return (
@@ -26,8 +27,10 @@ function SetupContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
+  const [avatarColor, setAvatarColor] = useState("amber");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -77,6 +80,13 @@ function SetupContent() {
     };
   }, []);
 
+  async function handleAvatarUpload(file: File) {
+    setAvatarUploading(true);
+    const { url } = await uploadAvatar(file);
+    if (url) setAvatarUrl(url);
+    setAvatarUploading(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -100,9 +110,12 @@ function SetupContent() {
       return;
     }
 
+    const finalUsername = username.trim() || `user_${Math.random().toString(36).slice(2, 8)}`;
+
     const result = await updateProfile({
-      displayName: displayName.trim() || null,
-      username: username.trim() || null,
+      username: finalUsername,
+      avatarColor,
+      ...(avatarUrl ? { avatarUrl } : {}),
     });
 
     setSaving(false);
@@ -222,23 +235,24 @@ function SetupContent() {
             <div className="border-t border-[#2e2e38] pt-5">
               <p className="text-xs font-mono text-amber-400 tracking-widest mb-4">YOUR DETAILS</p>
 
-              {/* Display name */}
-              <div className="flex flex-col gap-1.5 mb-4">
-                <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                  Display Name <span className="normal-case text-[#4a4a55]">(optional)</span>
-                </label>
-                <input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Your name"
-                  className="bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-3 text-sm text-[#e8e6df] placeholder-[#4a4a55] focus:outline-none focus:border-amber-500 transition-colors"
+              {/* Avatar */}
+              <div className="flex flex-col gap-1.5 mb-5">
+                <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">Avatar</label>
+                <AvatarEditor
+                  initials={(username || email || "?").slice(0, 2).toUpperCase()}
+                  avatarUrl={avatarUrl}
+                  avatarColor={avatarColor}
+                  uploading={avatarUploading}
+                  size="lg"
+                  onColorChange={setAvatarColor}
+                  onUpload={handleAvatarUpload}
                 />
               </div>
 
               {/* Username */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[#7a7870] tracking-widest uppercase">
-                  Username <span className="normal-case text-[#4a4a55]">(optional)</span>
+                  Username <span className="normal-case text-[#4a4a55]">(optional — one will be generated if left blank)</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7a7870] text-sm select-none">@</span>

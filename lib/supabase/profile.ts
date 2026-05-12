@@ -79,11 +79,11 @@ export async function uploadAvatar(file: File): Promise<{ url?: string; error?: 
   const path = `${user.id}/avatar.${ext}`;
 
   const { error: uploadError } = await supabase.storage
-    .from("avatars")
+    .from("PH assets")
     .upload(path, file, { upsert: true, contentType: file.type });
 
   if (uploadError) return { error: uploadError.message };
 
-  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  const { data } = supabase.storage.from("PH assets").getPublicUrl(path);
   return { url: `${data.publicUrl}?t=${Date.now()}` };
 }

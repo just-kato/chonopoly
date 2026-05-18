@@ -1,9 +1,28 @@
 import type { Metadata } from "next";
+import { Playfair_Display, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["700", "900"],
+  variable: "--font-playfair",
+});
+
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-ibm-plex-sans",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-ibm-plex-mono",
+});
+
 export const metadata: Metadata = {
-  title: "GA Real Estate Exam Study Guide",
-  description: "Georgia Real Estate Salesperson Licensing — Interactive Study Guide",
+  title: "Park Hawkins Properties",
+  description: "Park Hawkins Properties — Real Estate Investment & Acquisition",
   icons: {
     icon: [
       { url: "/favicons/favicon.ico", sizes: "any" },
@@ -16,12 +35,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${playfair.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
         <script dangerouslySetInnerHTML={{ __html: `if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js')` }} />
       </head>
-      <body className="antialiased" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
+      <body className="antialiased" style={{ fontFamily: "var(--font-ibm-plex-sans), system-ui, sans-serif" }}>
         {children}
       </body>
     </html>

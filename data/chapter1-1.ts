@@ -4,7 +4,7 @@ const chapter1_1: ChapterData = {
   id: "1-1",
   courseContent:`You’ve seen them in front of homes, commercial buildings, and on empty lots. Showing up in all shapes and sizes, from stout wooden posts to slim metal stakes, real estate for-sale signs seem to be everywhere. The buying and selling of real estate is a booming business.
 
-The demand for land has been going on for a while. The Homestead Act of 1862 allowed people to acquire up to 160 acres of free land if they worked it for five years. Eager settlers jumped at the chance and 1.6 million claims for land were approved. Private property ownership provided new opportunities, and it still does today.
+The demand for land has been going on for a while. The Homestead Act of 1862 allowed people to acquire up to 160 acres of free land if they worked it for five years. Eager colonizers jumped at the chance and 1.6 million claims for land were approved. Private property ownership provided new opportunities, and it still does today.
 
 When people relocate for new jobs, grow their families, downsize, or decide to invest in real property, they turn to the services of real estate brokers and agents.
 

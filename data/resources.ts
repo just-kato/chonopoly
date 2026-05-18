@@ -54,6 +54,18 @@ const resources: Record<string, PdfResource[]> = {
       filename: "5.2b Personal Property Infographic.pdf",
     },
   ],
+  "6-3": [
+    {
+      id: "6-3a",
+      title: "Building Envelope Infographic",
+      filename: "6.3a Building Envelope Infographic.pdf-65b9967525f47605d479f17e.pdf",
+    },
+    {
+      id: "6-3b",
+      title: "Floor Area Ratio Infographic",
+      filename: "6.3b Floor Area Ratio Infographic.pdf-65b9968625f47605d479f477.pdf",
+    },
+  ],
 
 };
 

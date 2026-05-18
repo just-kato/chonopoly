@@ -28,6 +28,13 @@ import chapter4_4 from "./chapter4-4";
 import chapter5_1 from "./chapter5-1";
 import chapter5_2 from "./chapter5-2";
 import chapter5_3 from "./chapter5-3";
+import chapter6_1 from "./chapter6-1";
+import chapter6_2 from "./chapter6-2";
+import chapter6_3 from "./chapter6-3";
+import chapter6_4 from "./chapter6-4";
+import chapter6_5 from "./chapter6-5";
+import chapter6_6 from "./chapter6-6";
+import chapter6_7 from "./chapter6-7";
 
 // Add new chapters here as you complete them
 const chapters: ChapterData[] = [
@@ -60,6 +67,13 @@ const chapters: ChapterData[] = [
   chapter5_1,
   chapter5_2,
   chapter5_3,
+  chapter6_1,
+  chapter6_2,
+  chapter6_3,
+  chapter6_4,
+  chapter6_5,
+  chapter6_6,
+  chapter6_7,
 ];
 
 export default chapters;

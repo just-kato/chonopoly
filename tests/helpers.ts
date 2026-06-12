@@ -27,4 +27,7 @@ export async function stubDataEndpoints(page: Page, role: "user" | "admin" = "us
   await page.route("**/api/teams/mine**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ teams: [] }) })
   );
+  await page.route("**/api/plaid/create-link-token**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ link_token: "link-sandbox-test-token" }) })
+  );
 }

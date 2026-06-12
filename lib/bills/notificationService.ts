@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@parkhawkinsproperties.com";
+function resend() { return new Resend(process.env.RESEND_API_KEY); }
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -12,7 +12,7 @@ export async function sendBillDueSoonEmail(
   bill: { name: string; amount: number; next_due_date: string },
   daysUntilDue: number
 ): Promise<void> {
-  await resend.emails.send({
+  await resend().emails.send({
     from: FROM,
     to: user.email,
     subject: `Your ${bill.name} is due in ${daysUntilDue} days — ${fmt(bill.amount)}`,
@@ -33,7 +33,7 @@ export async function sendBillDueTodayEmail(
   user: { email: string; name: string },
   bill: { name: string; amount: number }
 ): Promise<void> {
-  await resend.emails.send({
+  await resend().emails.send({
     from: FROM,
     to: user.email,
     subject: `${bill.name} is due today — ${fmt(bill.amount)}`,

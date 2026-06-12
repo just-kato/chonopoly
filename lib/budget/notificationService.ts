@@ -1,8 +1,8 @@
 import { Resend } from "resend";
 import { UserProfile } from "./types";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@parkhawkinsproperties.com";
+function resend() { return new Resend(process.env.RESEND_API_KEY); }
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -21,7 +21,7 @@ export async function sendBudgetWarningEmail(
   const remaining = Math.max(0, limit - spent);
   const name = user.username ?? "there";
 
-  await resend.emails.send({
+  await resend().emails.send({
     from: FROM,
     to: user.email,
     subject: `Heads up — you've used ${Math.round(percentUsed)}% of your ${categoryName} budget`,
@@ -65,7 +65,7 @@ export async function sendBudgetOverEmail(
   const spent = budget.period?.amount_spent ?? 0;
   const name = user.username ?? "there";
 
-  await resend.emails.send({
+  await resend().emails.send({
     from: FROM,
     to: user.email,
     subject: `You're over your ${categoryName} budget this month`,
@@ -107,7 +107,7 @@ export async function sendSavingsNudgeEmail(
 ): Promise<void> {
   const name = user.username ?? "there";
 
-  await resend.emails.send({
+  await resend().emails.send({
     from: FROM,
     to: user.email,
     subject: `Your ${budgetName} budget has ${fmt(unspentAmount)} unspent — consider saving it`,
@@ -177,7 +177,7 @@ export async function sendMorningReportEmail(
     body = `<p style="font-size:24px; margin:16px 0;">🎉</p><p>${goalLine}</p>`;
   }
 
-  await resend.emails.send({
+  await resend().emails.send({
     from: FROM,
     to: user.email,
     subject,

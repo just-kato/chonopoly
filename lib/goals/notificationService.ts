@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@parkhawkinsproperties.com";
+function resend() { return new Resend(process.env.RESEND_API_KEY); }
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -24,7 +24,7 @@ export function sendBalanceDropEmail(user: User, goal: GoalMeta, dropAmount: num
   const previousBalance = goal.current_balance + dropAmount;
   const distanceFromGoal = Math.max(0, goal.target_amount - goal.current_balance);
 
-  resend.emails
+  resend().emails
     .send({
       from: FROM,
       to: user.email,
@@ -54,7 +54,7 @@ export function sendGoalAchievedEmail(user: User, goal: GoalMeta): void {
   const name = user.username ?? "there";
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  resend.emails
+  resend().emails
     .send({
       from: FROM,
       to: user.email,

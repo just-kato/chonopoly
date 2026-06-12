@@ -44,3 +44,11 @@ test-results/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code settings (may contain credentials)
+.claude/
+
+# Internal docs — plans, prompts, reports
+docs/plans/
+docs/prompts/
+docs/reports/

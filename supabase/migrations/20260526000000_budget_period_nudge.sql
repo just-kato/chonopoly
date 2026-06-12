@@ -1,0 +1,2 @@
+ALTER TABLE budget_periods
+  ADD COLUMN IF NOT EXISTS nudge_sent BOOLEAN NOT NULL DEFAULT false;

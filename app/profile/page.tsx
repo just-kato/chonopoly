@@ -50,7 +50,7 @@ function ProfileContent() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
-  const [profile, setProfile] = useState<Profile>({ username: null, last_chapter_id: null, last_tab_slug: null, role: "user", avatar_url: null, avatar_color: "amber" });
+  const [profile, setProfile] = useState<Profile>({ username: null, last_chapter_id: null, last_tab_slug: null, role: "user", avatar_url: null, avatar_color: "amber", onboarding_complete: false, pay_cycle_start_day: 1, morning_report_enabled: true, health_score_last_calculated: null });
   const [progress, setProgress] = useState<AllProgress>({});
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarColor, setAvatarColor] = useState("amber");

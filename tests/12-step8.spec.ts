@@ -49,6 +49,7 @@ async function goToGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [MOCK_GOAL] }) })
   );
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("Emergency Fund")).toBeVisible();
 }
@@ -59,6 +60,7 @@ async function goToEmptyGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [] }) })
   );
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 }
@@ -112,6 +114,7 @@ test("clicking a team context option activates it and shows banner", async ({ pa
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [] }) })
   );
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 
@@ -137,6 +140,7 @@ test("goals summary API is called with context_type and context_id params", asyn
   });
 
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 
@@ -184,18 +188,18 @@ test("goals API 403 silently resets active context to personal", async ({ page }
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ teams: [MOCK_TEAM] }) })
   );
 
-  let call = 0;
+  // Personal context always succeeds; team context returns 403
   await page.route("**/api/goals/summary**", route => {
-    call++;
-    // First call (personal context) succeeds; second (team context) returns 403
-    if (call === 1) {
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [] }) });
-    } else {
+    const url = route.request().url();
+    if (url.includes("context_type=team")) {
       route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "Forbidden" }) });
+    } else {
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [] }) });
     }
   });
 
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 
@@ -239,7 +243,7 @@ test("wizard advances through all 5 steps and completes goal creation", async ({
   );
 
   // Open wizard
-  await page.getByRole("button", { name: /add goal/i }).click();
+  await page.getByRole("button", { name: /add goal/i }).first().click();
   await expect(page.getByTestId("goal-wizard")).toBeVisible();
 
   // Step 1 — name
@@ -266,8 +270,11 @@ test("wizard advances through all 5 steps and completes goal creation", async ({
   await expect(page.getByText("Europe Trip")).toBeVisible();
   await expect(page.getByText("Savings account")).toBeVisible();
 
-  // Create
+  // Create (advances to step 6 — add budgets)
   await page.getByTestId("wizard-create-btn").click();
+  // Step 6 — skip budgets to finish
+  await expect(page.getByTestId("wizard-finish-btn")).toBeVisible();
+  await page.getByTestId("wizard-finish-btn").click();
   await expect(page.getByTestId("goal-wizard")).not.toBeVisible();
 });
 
@@ -281,7 +288,7 @@ test("wizard back button returns to previous step", async ({ page }) => {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ accounts: MOCK_PLAID_ACCOUNTS }) })
   );
 
-  await page.getByRole("button", { name: /add goal/i }).click();
+  await page.getByRole("button", { name: /add goal/i }).first().click();
 
   // Advance to step 2
   await page.getByPlaceholder(/emergency fund/i).fill("Test Goal");
@@ -301,7 +308,7 @@ test("wizard shows discard confirmation when closed with unsaved name", async ({
 
   await goToGoals(page);
 
-  await page.getByRole("button", { name: /add goal/i }).click();
+  await page.getByRole("button", { name: /add goal/i }).first().click();
   await expect(page.getByTestId("goal-wizard")).toBeVisible();
 
   // Type a name, then try to close

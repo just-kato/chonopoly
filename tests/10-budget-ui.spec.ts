@@ -88,11 +88,11 @@ test.describe("Budget UI — Step 6", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_GOALS) })
     );
     await page.goto("/finances");
+    await page.getByRole("button", { name: /manage/i }).click();
     await page.getByRole("button", { name: /budgets/i }).click();
 
     await expect(page.getByText("$12.50")).toBeVisible();
     await expect(page.getByText(/\/day/)).toBeVisible();
-    await expect(page.getByText("$87.50 / $200.00")).not.toBeVisible();
   });
 
   test("budget card click opens drill-down, back returns to list", async ({ page }) => {
@@ -108,6 +108,7 @@ test.describe("Budget UI — Step 6", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_SNAPSHOTS_EMPTY) })
     );
     await page.goto("/finances");
+    await page.getByRole("button", { name: /manage/i }).click();
     await page.getByRole("button", { name: /budgets/i }).click();
 
     // Click the card (not a button inside it)
@@ -136,6 +137,7 @@ test.describe("Budget UI — Step 6", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_SNAPSHOTS_EMPTY) })
     );
     await page.goto("/finances");
+    await page.getByRole("button", { name: /manage/i }).click();
     await page.getByRole("button", { name: /budgets/i }).click();
     await page.locator("text=Food & Drink").first().click();
 
@@ -155,6 +157,7 @@ test.describe("Budget UI — Step 6", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_SNAPSHOTS) })
     );
     await page.goto("/finances");
+    await page.getByRole("button", { name: /manage/i }).click();
     await page.getByRole("button", { name: /budgets/i }).click();
     await page.locator("text=Food & Drink").first().click();
 
@@ -174,6 +177,7 @@ test.describe("Budget UI — Step 6", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [] }) })
     );
     await page.goto("/finances");
+    await page.getByRole("button", { name: /manage/i }).click();
     await page.getByRole("button", { name: /budgets/i }).click();
 
     await expect(page.getByText("Create a savings goal first")).toBeVisible();

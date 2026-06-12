@@ -54,7 +54,7 @@ test.describe("Budget page — no bank connected", () => {
     await page.route("**/rest/v1/plaid_items**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
     );
-    await page.goto("/budget");
+    await page.goto("/finances");
   });
 
   test("shows empty state with connect button", async ({ page }) => {
@@ -86,27 +86,30 @@ test.describe("Budget page — bank connected", () => {
         body: JSON.stringify({ accounts: MOCK_ACCOUNTS, transactions: MOCK_TRANSACTIONS }),
       })
     );
-    await page.goto("/budget");
+    await page.goto("/finances");
   });
 
   test("shows account balance", async ({ page }) => {
     await expect(page.getByText("Checking")).toBeVisible();
-    await expect(page.getByText("$2,450.00")).toBeVisible();
+    await expect(page.getByText("$2,450.00").first()).toBeVisible();
   });
 
   test("shows spending breakdown categories", async ({ page }) => {
-    await expect(page.getByText("Food & Drink")).toBeVisible();
-    await expect(page.getByText("Transportation")).toBeVisible();
-    await expect(page.getByText("Entertainment")).toBeVisible();
+    await page.getByRole("button", { name: /transactions/i }).click();
+    await expect(page.getByText("Food & Drink", { exact: true })).toBeVisible();
+    await expect(page.getByText("Transportation", { exact: true })).toBeVisible();
+    await expect(page.getByText("Entertainment", { exact: true })).toBeVisible();
   });
 
   test("shows transaction list with merchants", async ({ page }) => {
+    await page.getByRole("button", { name: /transactions/i }).click();
     await expect(page.getByText("Trader Joe's")).toBeVisible();
     await expect(page.getByText("Shell")).toBeVisible();
     await expect(page.getByText("Netflix")).toBeVisible();
   });
 
   test("transaction amounts are formatted correctly", async ({ page }) => {
+    await page.getByRole("button", { name: /transactions/i }).click();
     await expect(page.getByText("-$63.47")).toBeVisible();
     await expect(page.getByText("-$45.00")).toBeVisible();
     await expect(page.getByText("-$15.49")).toBeVisible();
@@ -122,10 +125,10 @@ test.describe("Budget link in profile dropdown", () => {
 
   test("Budget link appears in profile dropdown", async ({ page }) => {
     await page.getByRole("button", { name: /profile menu/i }).click();
-    await expect(page.getByRole("link", { name: /budget/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /finances/i })).toBeVisible();
   });
 
-  test("Budget link navigates to /budget", async ({ page }) => {
+  test("Budget link navigates to /finances", async ({ page }) => {
     await page.route("**/rest/v1/plaid_items**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
     );
@@ -133,7 +136,7 @@ test.describe("Budget link in profile dropdown", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ accounts: [], transactions: [] }) })
     );
     await page.getByRole("button", { name: /profile menu/i }).click();
-    await page.getByRole("link", { name: /budget/i }).click();
-    await expect(page).toHaveURL("http://localhost:3000/budget");
+    await page.getByRole("link", { name: /finances/i }).click();
+    await expect(page).toHaveURL("http://localhost:3000/finances");
   });
 });

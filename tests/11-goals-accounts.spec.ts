@@ -103,6 +103,7 @@ async function goToGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [MOCK_GOAL] }) })
   );
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("Emergency Fund")).toBeVisible();
 }
@@ -114,7 +115,7 @@ test("add goal opens wizard at step 1", async ({ page }) => {
 
   await goToGoals(page);
 
-  await page.getByRole("button", { name: /add goal/i }).click();
+  await page.getByRole("button", { name: /add goal/i }).first().click();
   await expect(page.getByTestId("goal-wizard")).toBeVisible();
   await expect(page.getByText("New savings goal")).toBeVisible();
   await expect(page.getByTestId("wizard-progress")).toBeVisible();
@@ -127,7 +128,7 @@ test("wizard step 1 Next button is disabled until name has 2+ chars", async ({ p
   if (!process.env.TEST_EMAIL) test.skip();
 
   await goToGoals(page);
-  await page.getByRole("button", { name: /add goal/i }).click();
+  await page.getByRole("button", { name: /add goal/i }).first().click();
   await expect(page.getByTestId("goal-wizard")).toBeVisible();
 
   const nextBtn = page.getByRole("button", { name: /next/i });
@@ -157,7 +158,7 @@ test("wizard goal creation POSTs savings_account and spending_accounts", async (
   );
 
   // Step 1: name
-  await page.getByRole("button", { name: /add goal/i }).click();
+  await page.getByRole("button", { name: /add goal/i }).first().click();
   await page.getByPlaceholder(/emergency fund/i).fill("Vacation Fund");
   await page.getByRole("button", { name: /next/i }).click();
 

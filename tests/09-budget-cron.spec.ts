@@ -5,12 +5,13 @@
 import { test, expect, request } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const FN_BASE        = `${SUPABASE_URL.replace("supabase.co", "supabase.co")}/functions/v1`;
+const SUPABASE_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const FN_BASE        = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1` : "";
 
-// Service role client for seeding and asserting
-const db = createClient(SUPABASE_URL, SERVICE_KEY);
+// Service role client for seeding and asserting — placeholder values prevent
+// module-level crash when SUPABASE_SERVICE_ROLE_KEY is absent (CI without secret)
+const db = createClient(SUPABASE_URL || "https://placeholder.supabase.co", SERVICE_KEY || "placeholder");
 
 function today() {
   return new Date().toISOString().split("T")[0];
@@ -25,6 +26,7 @@ async function cleanupTestData(goalId: string, userId: string) {
 }
 
 test.describe("nightly-snapshot Edge Function", () => {
+  test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, "SUPABASE_SERVICE_ROLE_KEY not set — skipping cron tests");
   let goalId: string;
   let budgetId: string;
   const TEST_ACCOUNT_ID = "cron-test-account-1";
@@ -146,6 +148,7 @@ test.describe("nightly-snapshot Edge Function", () => {
 });
 
 test.describe("nightly-budget-reset Edge Function", () => {
+  test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, "SUPABASE_SERVICE_ROLE_KEY not set — skipping cron tests");
   let goalId: string;
   let budgetId: string;
 

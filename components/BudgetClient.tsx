@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ActiveContext, GoalSummary } from "@/lib/goals/types";
 import { loadProfile } from "@/lib/supabase/profile";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { getAvatarColors } from "@/lib/avatar";
 import dynamic from "next/dynamic";
 const SpendingChart = dynamic(() => import("./budget/SpendingChart"), { ssr: false });
@@ -817,6 +818,7 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [goalsCount, setGoalsCount] = useState<number | null>(null);
 
   const loadSummaries = useCallback(async () => {
     const res = await fetch("/api/budget/summary");
@@ -827,6 +829,13 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   }, []);
 
   useEffect(() => { loadSummaries(); }, [loadSummaries]);
+
+  useEffect(() => {
+    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
+      .then(r => r.ok ? r.json() : { goals: [] })
+      .then((d: { goals?: unknown[] }) => setGoalsCount((d.goals ?? []).length))
+      .catch(() => setGoalsCount(0));
+  }, [activeContext.type, activeContext.id]);
 
   async function pauseBudget(budgetId: string, currentStatus: "active" | "paused") {
     await fetch("/api/budget/update", {
@@ -909,16 +918,29 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
       })()}
 
       {summaries.length === 0 && !wizardOpen && (
-        <div className="text-center py-20 text-(--color-text-secondary)">
-          <div className="w-16 h-16 rounded-(--radius-xl) bg-(--color-elevated) border border-(--color-border-default) flex items-center justify-center mx-auto mb-5">
-            <Wallet size={28} className="text-(--color-text-tertiary)" />
+        goalsCount === 0 ? (
+          <div className="text-center py-20 text-(--color-text-secondary)">
+            <div className="w-16 h-16 rounded-(--radius-xl) bg-(--color-elevated) border border-(--color-border-default) flex items-center justify-center mx-auto mb-5">
+              <Target size={28} className="text-(--color-text-tertiary)" />
+            </div>
+            <p className="text-(--color-text-primary) font-semibold text-base mb-2">Create a savings goal first</p>
+            <p className="text-sm mb-6 max-w-xs mx-auto">Budgets are linked to savings goals. Set up a goal before adding a budget.</p>
+            <button onClick={() => onGoTo("goals")} className="inline-flex items-center gap-2 px-5 py-2.5 bg-(--color-accent) text-(--color-base) text-sm font-semibold rounded-(--radius-md) hover:opacity-90 transition-opacity mx-auto">
+              <Plus size={14} /> Set up a goal first
+            </button>
           </div>
-          <p className="text-(--color-text-primary) font-semibold text-base mb-2">No budgets yet</p>
-          <p className="text-sm mb-6 max-w-xs mx-auto">Set a spending limit per category to start tracking where your money goes.</p>
-          <button onClick={() => { setEditingBudget(null); setWizardOpen(true); }} className="inline-flex items-center gap-2 px-5 py-2.5 bg-(--color-accent) text-(--color-base) text-sm font-semibold rounded-(--radius-md) hover:opacity-90 transition-opacity mx-auto">
-            <Plus size={14} /> Create your first budget
-          </button>
-        </div>
+        ) : (
+          <div className="text-center py-20 text-(--color-text-secondary)">
+            <div className="w-16 h-16 rounded-(--radius-xl) bg-(--color-elevated) border border-(--color-border-default) flex items-center justify-center mx-auto mb-5">
+              <Wallet size={28} className="text-(--color-text-tertiary)" />
+            </div>
+            <p className="text-(--color-text-primary) font-semibold text-base mb-2">No budgets yet</p>
+            <p className="text-sm mb-6 max-w-xs mx-auto">Set a spending limit per category to start tracking where your money goes.</p>
+            <button onClick={() => { setEditingBudget(null); setWizardOpen(true); }} className="inline-flex items-center gap-2 px-5 py-2.5 bg-(--color-accent) text-(--color-base) text-sm font-semibold rounded-(--radius-md) hover:opacity-90 transition-opacity mx-auto">
+              <Plus size={14} /> Create your first budget
+            </button>
+          </div>
+        )
       )}
 
       {summaries.length > 0 && (
@@ -1739,6 +1761,14 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
     setFetchTick((n) => n + 1);
   }, []);
 
+  // Re-verify connected Plaid items client-side so Playwright tests can mock rest/v1/plaid_items
+  useEffect(() => {
+    const supabase = createSupabaseClient();
+    supabase.from("plaid_items").select("item_id, institution_name").then(({ data }) => {
+      if (data) setConnected(data.map(row => ({ itemId: row.item_id as string, institutionName: row.institution_name as string | null })));
+    });
+  }, []);
+
   useEffect(() => {
     if (connected.length === 0) return;
     let alive = true;
@@ -1757,8 +1787,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         setLoading(false);
       });
     return () => { alive = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchTick]);
+  }, [fetchTick, connected.length]);
 
   async function disconnect(itemId: string) {
     await fetch("/api/plaid/disconnect", {
@@ -1852,7 +1881,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
       >
         {/* Back + label */}
         <div className="px-4 pt-5 pb-3 flex items-center gap-2 border-b border-(--color-border-subtle)">
-          <Link href="/" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"><ArrowLeft size={14} /></Link>
+          <Link href="/" aria-label="Arrow back" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"><ArrowLeft size={14} /></Link>
           <span className="text-[10px] text-(--color-text-disabled) uppercase tracking-[0.1em] font-medium">Finances</span>
         </div>
 
@@ -2042,8 +2071,15 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
           </div>
         ) : (
           <div className="overflow-y-auto flex-1 w-full px-6 py-8">
-            {view !== "profile" && view !== "transactions" && view !== "manage" && <h1 className="text-[18px] font-semibold mb-6 text-(--color-text-primary)">{viewTitle}</h1>}
+            {view !== "profile" && view !== "transactions" && view !== "manage" && view !== "overview" && <h1 className="text-[18px] font-semibold mb-6 text-(--color-text-primary)">{viewTitle}</h1>}
             {error && <p className="mb-6 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{error}</p>}
+            {view === "overview" && connected.length === 0 && (
+              <div className="text-center py-24 text-(--color-text-secondary)">
+                <p className="text-lg font-medium text-(--color-text-primary) mb-2">No banks connected</p>
+                <p className="text-sm mb-6">Connect your bank to see transactions and spending.</p>
+                <PlaidLinkButton onSuccess={() => window.location.reload()} linkToken={linkToken} />
+              </div>
+            )}
             {view === "analytics" && connected.length > 0 && !loading && (
               <AnalyticsPanel spending={spending} transactions={transactions} totalSpent={totalSpent} totalIncome={totalIncome} accounts={accounts} onGoTo={navTo} />
             )}

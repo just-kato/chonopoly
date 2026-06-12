@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, PiggyBank } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { getAvatarColors } from "@/lib/avatar";
 
@@ -64,6 +64,15 @@ export default function ProfileDropdown({ initials, name, email, avatarUrl, avat
           >
             <User size={14} />
             Profile
+          </Link>
+
+          <Link
+            href="/finances"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-4 py-3 text-sm text-[#c8c5bc] hover:bg-[#222228] hover:text-white transition-colors"
+          >
+            <PiggyBank size={14} />
+            Finances
           </Link>
 
           <div className="border-t border-[#2e2e38]">

@@ -16,8 +16,15 @@ export async function stubDataEndpoints(page: Page, role: "user" | "admin" = "us
           role,
           avatar_url: null,
           avatar_color: "amber",
+          onboarding_complete: true,
+          pay_cycle_start_day: 1,
+          morning_report_enabled: true,
+          health_score_last_calculated: null,
         },
       ]),
     })
+  );
+  await page.route("**/api/teams/mine**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ teams: [] }) })
   );
 }

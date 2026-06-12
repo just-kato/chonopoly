@@ -40,6 +40,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  // Forward user ID to server components via request headers — avoids a second getUser() call in each page
+  if (user) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-user-id", user.id);
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...rest }) =>
+      res.cookies.set(name, value, rest)
+    );
+    return res;
+  }
+
   return supabaseResponse;
 }
 

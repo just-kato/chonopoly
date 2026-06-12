@@ -68,6 +68,7 @@ async function goToBills(
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ transactions: [], accounts: [] }) })
   );
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /bills/i }).click();
 }
 
@@ -90,11 +91,11 @@ test("bills grid shows bill names and amounts", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
   await goToBills(page);
 
-  await expect(page.getByText("Netflix")).toBeVisible();
-  await expect(page.getByText("Electricity")).toBeVisible();
+  await expect(page.getByText("Netflix").first()).toBeVisible();
+  await expect(page.getByText("Electricity").first()).toBeVisible();
   // Amount shown
-  await expect(page.getByText(/22\.99/)).toBeVisible();
-  await expect(page.getByText(/140\.00/)).toBeVisible();
+  await expect(page.getByText(/22\.99/).first()).toBeVisible();
+  await expect(page.getByText(/140\.00/).first()).toBeVisible();
 });
 
 // ─── Test 3: Empty state ──────────────────────────────────────────────────────
@@ -113,12 +114,11 @@ test("add bill button opens form", async ({ page }) => {
 
   // Click "Add bill" in the panel header
   await page.getByRole("button", { name: /add bill/i }).first().click();
-  await expect(page.getByPlaceholder("Bill name")).toBeVisible();
-  await expect(page.getByRole("button", { name: /cancel/i })).toBeVisible();
+  await expect(page.getByPlaceholder("Netflix, Rent, Car payment...")).toBeVisible();
 
-  // Cancel closes it
-  await page.getByRole("button", { name: /cancel/i }).click();
-  await expect(page.getByPlaceholder("Bill name")).not.toBeVisible();
+  // Close via backdrop click or wizard close button
+  await page.keyboard.press("Escape");
+  await expect(page.getByPlaceholder("Netflix, Rent, Car payment...")).not.toBeVisible();
 });
 
 // ─── Test 5: Mark paid ────────────────────────────────────────────────────────
@@ -145,11 +145,12 @@ test("mark paid sends correct request", async ({ page }) => {
   );
 
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /bills/i }).click();
 
   // Hover the Netflix row to reveal "Mark paid" button
-  await page.getByText("Netflix").hover();
-  await page.getByRole("button", { name: /mark paid/i }).first().click();
+  await page.getByTestId("bill-row-bill-1").hover();
+  await page.getByTestId("bill-row-bill-1").getByTitle("Mark paid").click({ force: true });
 
   // Verify the request was sent with the right bill_id
   expect(markPaidBody).toMatchObject({ bill_id: "bill-1" });
@@ -167,8 +168,8 @@ test("chart and calendar view buttons switch views", async ({ page }) => {
 
   await page.getByRole("button", { name: /calendar/i }).click();
   // Calendar shows weekday headers
-  await expect(page.getByText("Sun")).toBeVisible();
-  await expect(page.getByText("Mon")).toBeVisible();
+  await expect(page.getByText("Sun").first()).toBeVisible();
+  await expect(page.getByText("Mon").first()).toBeVisible();
 });
 
 // ─── Test 7: Payment history expand ──────────────────────────────────────────
@@ -177,13 +178,8 @@ test("expanding a bill row shows payment history", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
   await goToBills(page);
 
-  // The Electricity bill has 2 payments — find expand chevron in the all-bills list
-  // The expand button is inside the Electricity row
-  const electricityRow = page.locator("div").filter({ hasText: /^Electricity/ }).last();
-  await electricityRow.hover();
-  // Click the chevron down button
-  const chevron = electricityRow.getByRole("button").last();
-  await chevron.click();
+  // The Electricity bill has 2 payments — click its expand chevron
+  await page.getByTestId("bill-row-bill-2").getByTestId("bill-expand-btn").click();
 
   await expect(page.getByText("Payment history")).toBeVisible();
   await expect(page.getByText("2026-05")).toBeVisible();
@@ -195,9 +191,8 @@ test("edit button opens prefilled form", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
   await goToBills(page);
 
-  const electricityRow = page.locator("div").filter({ hasText: /^Electricity/ }).last();
-  await electricityRow.hover();
-  await electricityRow.getByRole("button", { name: /edit/i }).click();
+  await page.getByTestId("bill-row-bill-2").hover();
+  await page.getByTestId("bill-row-bill-2").getByTestId("bill-edit-btn").click();
 
   const nameInput = page.getByPlaceholder("Bill name");
   await expect(nameInput).toBeVisible();

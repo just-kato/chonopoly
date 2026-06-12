@@ -657,7 +657,7 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
           const meta = b.category_id ? CATEGORY_META[b.category_id] : null;
 
           return (
-            <div key={b.id}>
+            <div key={b.id} data-testid={`bill-row-${b.id}`}>
               <div className="flex items-center gap-3 px-4 py-3 group cursor-pointer" onClick={() => onBillClick(b)}>
                 <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold ${color}`}>
                   {b.name.charAt(0).toUpperCase()}
@@ -714,6 +714,7 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
                     <button
                       onClick={e => { e.stopPropagation(); onEdit(b); }}
                       title="Edit"
+                      data-testid="bill-edit-btn"
                       className="p-1.5 rounded-md text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-elevated) transition-colors"
                     >
                       <Pencil size={13} />
@@ -730,6 +731,7 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
                   {b.bill_payments.length > 0 && (
                     <button
                       onClick={e => { e.stopPropagation(); toggleExpand(b.id); }}
+                      data-testid="bill-expand-btn"
                       className="p-1 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"
                     >
                       <ChevronDown size={14} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} />

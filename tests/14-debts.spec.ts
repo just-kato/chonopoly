@@ -47,6 +47,7 @@ async function goToDebts(
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ debts }) })
   );
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /debts/i }).click();
 }
 
@@ -82,28 +83,42 @@ test("wizard creates a debt", async ({ page }) => {
     created = true;
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ debt_id: "debt-new-1" }) });
   });
+  await page.route("**/api/bills**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
+  );
 
   await page.goto("/finances");
+  await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /debts/i }).click();
   await page.getByTestId("add-first-debt-btn").click();
 
-  // Step 1: name + type
-  await page.getByPlaceholder(/Chase Sapphire/i).fill("My Test Debt");
-  await page.getByRole("button", { name: /next →/i }).click();
+  // Step 1: name
+  await page.getByPlaceholder(/Car loan.*Chase Sapphire/i).fill("My Test Debt");
+  await page.getByRole("button", { name: /continue →/i }).click();
 
-  // Step 2: balance
+  // Step 2: debt type
+  await expect(page.getByText("What kind of debt is this?")).toBeVisible();
+  await page.getByRole("button", { name: /credit card/i }).click();
+  await page.getByRole("button", { name: /continue →/i }).click();
+
+  // Step 3: balance
+  await expect(page.getByText("What's the current balance?")).toBeVisible();
   await page.locator('input[placeholder="0.00"]').first().fill("5000");
-  await page.getByRole("button", { name: /next →/i }).click();
+  await page.getByRole("button", { name: /continue →/i }).click();
 
-  // Step 3: APR
-  await page.locator('input[placeholder="e.g. 24.99"]').fill("19.99");
-  await page.locator('input[placeholder="0.00"]').fill("100");
-  await page.getByRole("button", { name: /next →/i }).click();
+  // Step 4: APR
+  await expect(page.getByText("What's the interest rate?")).toBeVisible();
+  await page.locator('input[placeholder="0.00"]').fill("19.99");
+  await page.getByRole("button", { name: /continue →/i }).click();
 
-  // Step 4: skip target date
-  await page.getByRole("button", { name: /skip →/i }).click();
+  // Step 5: term / min payment — skip with Continue
+  await page.getByRole("button", { name: /continue →/i }).click();
 
-  // Step 5: create
+  // Step 6: link bills — skip
+  await page.getByRole("button", { name: /no, skip this/i }).click();
+
+  // Step 7: review → save
+  await expect(page.getByText("My Test Debt")).toBeVisible();
   await page.getByTestId("wizard-debt-create-btn").click();
 
   await expect(page.getByText("Chase Sapphire Card")).toBeVisible();

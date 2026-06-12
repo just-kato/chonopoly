@@ -6,7 +6,7 @@ import { test, expect, request } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const SERVICE_KEY    = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
 const FN_BASE        = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1` : "";
 
 // Service role client for seeding and asserting — placeholder values prevent

@@ -749,6 +749,7 @@ export function DebtWizard({ onSuccess, onClose, contextType, contextId, zIndex 
                   disabled={!stepValid || saving}
                   className="flex-1 py-2.5 rounded-xl text-[14px] font-semibold disabled:opacity-30 transition-opacity"
                   style={{ background: 'var(--color-accent)', color: 'var(--color-base)' }}
+                  data-testid={step === 7 ? "wizard-debt-create-btn" : undefined}
                 >
                   {step === 7 ? (saving ? 'Saving…' : 'Save debt →') : 'Continue →'}
                 </button>

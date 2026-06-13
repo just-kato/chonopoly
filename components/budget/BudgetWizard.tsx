@@ -625,7 +625,7 @@ export default function BudgetWizard({
   return (
     <>
       <div className="fixed inset-0 bg-black/70 backdrop-blur-[8px] z-50" />
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#111115] rounded-2xl w-full max-w-lg z-50 max-h-[85vh] overflow-y-auto wizard-pop-in">
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#111115] rounded-2xl w-full max-w-[calc(100vw-32px)] md:max-w-lg z-50 max-h-[85vh] overflow-y-auto wizard-pop-in">
 
         {/* Discard overlay */}
         {showDiscard && (

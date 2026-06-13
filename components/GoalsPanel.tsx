@@ -141,108 +141,159 @@ function GoalCard({ goal, onSync, onPause, onDelete, onEdit, onOpen, isNew }: {
 
   return (
     <div
-      className={`border rounded-md p-4 space-y-3 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 shadow-(--shadow-sm) hover:shadow-(--shadow-md) ${isPaused ? "opacity-50" : ""} ${isNew ? "ring-2 ring-(--color-accent)/20" : ""} ${isAchieved ? "bg-[rgba(34,197,94,0.05)] border-(--color-border-default)" : "bg-(--color-surface) border-(--color-border-default)"}`}
+      className={`border rounded-2xl lg:rounded-md p-4 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 shadow-(--shadow-sm) hover:shadow-(--shadow-md) ${isPaused ? "opacity-50" : ""} ${isNew ? "ring-2 ring-(--color-accent)/20" : ""} ${isAchieved ? "bg-[rgba(34,197,94,0.05)] border-(--color-border-default)" : "bg-(--color-surface) border-(--color-border-default)"}`}
       onClick={onOpen}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
+      {/* Mobile goal card layout */}
+      <div className="lg:hidden">
+        {/* Row 1: Emoji | Name + status | Percentage */}
+        <div className="flex items-center gap-3 mb-2">
           <span
-            className="text-[32px] leading-none"
-            style={{
-              filter: (isAchieved || (!isPaused && goal.behind_by === 0))
-                ? "drop-shadow(0 0 8px rgba(0,212,170,0.5))"
-                : undefined,
-            }}
+            className="text-[32px] leading-none w-10 h-10 flex items-center justify-center shrink-0"
+            style={{ filter: (isAchieved || (!isPaused && goal.behind_by === 0)) ? "drop-shadow(0 0 8px rgba(0,212,170,0.5))" : undefined }}
           >
             {goal.icon}
           </span>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-semibold text-(--color-text-primary)">{goal.name}</p>
-              {isAchieved && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(34,197,94,0.12)] text-(--color-success)">Achieved ✓</span>}
-              {isPaused && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-(--color-overlay) text-(--color-text-tertiary)">Paused</span>}
-              {!isAchieved && !isPaused && goal.behind_by > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(245,158,11,0.12)] text-(--color-warning)">
-                  Behind by ${formatMoney(goal.behind_by)}
-                </span>
-              )}
-              {!isAchieved && !isPaused && goal.behind_by === 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(34,197,94,0.12)] text-(--color-success)">On track</span>
-              )}
-            </div>
-            {!isAchieved && !isPaused && goal.behind_by > 0 && (
-              <p className="text-[10px] text-(--color-text-secondary) mt-0.5">
-                You should have ${formatMoney(goal.expected_balance)} saved by now to stay on track.
-              </p>
-            )}
-            <p className="text-xs text-(--color-text-secondary) mt-0.5">
-              <span className="text-(--color-text-primary) font-(--font-mono)">${formatMoney(goal.current_balance)}</span>
-              {goal.target_amount != null && (
-                <span className="text-(--color-text-tertiary)"> / ${formatMoney(goal.target_amount)}</span>
-              )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold text-(--color-text-primary) truncate">{goal.name}</p>
+            <p className="text-[12px] text-(--color-text-tertiary)">
+              {goal.current_balance != null && `$${formatMoney(goal.current_balance)} saved`}
+              {isAchieved && " · Achieved"}
+              {isPaused && " · Paused"}
+              {!isAchieved && !isPaused && goal.behind_by > 0 && ` · Behind $${formatMoney(goal.behind_by)}`}
+              {!isAchieved && !isPaused && goal.behind_by === 0 && " · On track"}
             </p>
+          </div>
+          <span className={`shrink-0 text-[18px] font-semibold font-(--font-mono) ${isAchieved ? "text-(--color-success)" : "text-(--color-accent)"}`}>
+            {Math.round(goal.percent_complete)}%
+          </span>
+        </div>
+        {/* Row 2: Progress bar */}
+        <div className="h-1.5 bg-(--color-border-subtle) rounded-full overflow-hidden mb-2">
+          <div
+            className="h-full rounded-full progress-bar-animate"
+            style={{
+              "--bar-width": `${Math.min(goal.percent_complete, 100)}%`,
+              background: isAchieved ? "var(--color-success)" : "linear-gradient(90deg, var(--color-accent), var(--color-success))",
+            } as React.CSSProperties}
+          />
+        </div>
+        {/* Row 3: $saved / $target · days until date */}
+        <div className="flex items-center justify-between text-[12px] text-(--color-text-tertiary)">
+          <span className="font-(--font-mono)">
+            ${formatMoney(goal.current_balance)}
+            {goal.target_amount != null && <span className="text-(--color-text-disabled)"> / ${formatMoney(goal.target_amount)}</span>}
+          </span>
+          <span>
+            {goal.target_date
+              ? (isAchieved ? "Goal reached" : days != null && days > 0 ? `${days}d until ${fmtDate(goal.target_date)}` : "Past target date")
+              : "No target date"}
+          </span>
+        </div>
+      </div>
+
+      {/* Desktop goal card layout — unchanged */}
+      <div className="hidden lg:block space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <span
+              className="text-[32px] leading-none"
+              style={{
+                filter: (isAchieved || (!isPaused && goal.behind_by === 0))
+                  ? "drop-shadow(0 0 8px rgba(0,212,170,0.5))"
+                  : undefined,
+              }}
+            >
+              {goal.icon}
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-(--color-text-primary)">{goal.name}</p>
+                {isAchieved && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(34,197,94,0.12)] text-(--color-success)">Achieved ✓</span>}
+                {isPaused && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-(--color-overlay) text-(--color-text-tertiary)">Paused</span>}
+                {!isAchieved && !isPaused && goal.behind_by > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(245,158,11,0.12)] text-(--color-warning)">
+                    Behind by ${formatMoney(goal.behind_by)}
+                  </span>
+                )}
+                {!isAchieved && !isPaused && goal.behind_by === 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(34,197,94,0.12)] text-(--color-success)">On track</span>
+                )}
+              </div>
+              {!isAchieved && !isPaused && goal.behind_by > 0 && (
+                <p className="text-[10px] text-(--color-text-secondary) mt-0.5">
+                  You should have ${formatMoney(goal.expected_balance)} saved by now to stay on track.
+                </p>
+              )}
+              <p className="text-xs text-(--color-text-secondary) mt-0.5">
+                <span className="text-(--color-text-primary) font-(--font-mono)">${formatMoney(goal.current_balance)}</span>
+                {goal.target_amount != null && (
+                  <span className="text-(--color-text-tertiary)"> / ${formatMoney(goal.target_amount)}</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 ml-2" onClick={e => e.stopPropagation()}>
+            <button onClick={onSync} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
+              <RotateCcw size={12} />
+              <span className="text-[9px]">Sync</span>
+            </button>
+            <button onClick={onEdit} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
+              <Pencil size={12} />
+              <span className="text-[9px]">Edit</span>
+            </button>
+            <button onClick={onPause} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
+              {isPaused ? <Play size={12} /> : <Pause size={12} />}
+              <span className="text-[9px]">{isPaused ? "Resume" : "Pause"}</span>
+            </button>
+            <button onClick={onDelete} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-danger) transition-colors">
+              <Trash2 size={12} />
+              <span className="text-[9px]">Delete</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-start gap-3 ml-2" onClick={e => e.stopPropagation()}>
-          <button onClick={onSync} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
-            <RotateCcw size={12} />
-            <span className="text-[9px]">Sync</span>
-          </button>
-          <button onClick={onEdit} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
-            <Pencil size={12} />
-            <span className="text-[9px]">Edit</span>
-          </button>
-          <button onClick={onPause} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
-            {isPaused ? <Play size={12} /> : <Pause size={12} />}
-            <span className="text-[9px]">{isPaused ? "Resume" : "Pause"}</span>
-          </button>
-          <button onClick={onDelete} className="flex flex-col items-center gap-0.5 text-(--color-text-tertiary) hover:text-(--color-danger) transition-colors">
-            <Trash2 size={12} />
-            <span className="text-[9px]">Delete</span>
-          </button>
+        <div className="h-1.5 bg-(--color-border-subtle) rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full progress-bar-animate"
+            style={{
+              "--bar-width": `${Math.min(goal.percent_complete, 100)}%`,
+              background: isAchieved
+                ? "var(--color-success)"
+                : "linear-gradient(90deg, var(--color-accent), var(--color-success))",
+            } as React.CSSProperties}
+          />
         </div>
-      </div>
 
-      <div className="h-1.5 bg-(--color-border-subtle) rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full progress-bar-animate"
-          style={{
-            "--bar-width": `${Math.min(goal.percent_complete, 100)}%`,
-            background: isAchieved
-              ? "var(--color-success)"
-              : "linear-gradient(90deg, var(--color-accent), var(--color-success))",
-          } as React.CSSProperties}
-        />
-      </div>
-
-      <div className="flex items-center justify-between text-[10px] text-(--color-text-secondary)">
-        <span>{Math.round(goal.percent_complete)}% saved</span>
-        {goal.target_date ? (
-          <span>
-            {isAchieved
-              ? "Goal reached"
-              : days != null && days > 0
-                ? `${days}d until ${fmtDate(goal.target_date)}`
-                : "Past target date"}
-          </span>
-        ) : (
-          <span>No target date</span>
-        )}
-      </div>
-
-      {!isAchieved && (
-        <div className="flex items-center justify-between text-[10px] text-(--color-text-tertiary) border-t border-(--color-border-subtle) pt-2">
-          <span>
-            {goal.projected_completion_date
-              ? `Est. completion ${fmtDate(goal.projected_completion_date)}`
-              : "Check back in 7 days for projections."}
-          </span>
-          {goal.weekly_avg_growth > 0 && (
-            <span>+${formatMoney(goal.weekly_avg_growth)}/wk avg</span>
+        <div className="flex items-center justify-between text-[10px] text-(--color-text-secondary)">
+          <span>{Math.round(goal.percent_complete)}% saved</span>
+          {goal.target_date ? (
+            <span>
+              {isAchieved
+                ? "Goal reached"
+                : days != null && days > 0
+                  ? `${days}d until ${fmtDate(goal.target_date)}`
+                  : "Past target date"}
+            </span>
+          ) : (
+            <span>No target date</span>
           )}
         </div>
-      )}
+
+        {!isAchieved && (
+          <div className="flex items-center justify-between text-[10px] text-(--color-text-tertiary) border-t border-(--color-border-subtle) pt-2">
+            <span>
+              {goal.projected_completion_date
+                ? `Est. completion ${fmtDate(goal.projected_completion_date)}`
+                : "Check back in 7 days for projections."}
+            </span>
+            {goal.weekly_avg_growth > 0 && (
+              <span>+${formatMoney(goal.weekly_avg_growth)}/wk avg</span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1015,17 +1066,39 @@ const GoalsPanel = forwardRef<GoalsPanelHandle, GoalsPanelProps>(
         {goals.length > 0 && (() => {
           const n = totalTarget > 0 ? 3 : 2;
           return (
-            <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
-              <StatCard
-                label="Total Saved"
-                value={`$${formatMoney(totalSaved)}`}
-                variant={totalSaved > 0 ? "success" : "muted"}
-              />
-              {totalTarget > 0 && (
-                <StatCard label="Total Target" value={`$${formatMoney(totalTarget)}`} />
-              )}
-              <StatCard label="Active Goals" value={String(activeGoals.length)} />
-            </div>
+            <>
+              {/* Mobile summary card */}
+              <div className="lg:hidden rounded-2xl p-4 mb-4 border border-(--color-border-subtle) bg-(--color-elevated)">
+                <div className="flex justify-between items-start">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Saved</span>
+                    <span className={`text-[18px] font-semibold font-(--font-mono) ${totalSaved > 0 ? "text-(--color-success)" : "text-(--color-text-tertiary)"}`}>${formatMoney(totalSaved)}</span>
+                  </div>
+                  {totalTarget > 0 && (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Target</span>
+                      <span className="text-[18px] font-semibold font-(--font-mono) text-(--color-text-primary)">${formatMoney(totalTarget)}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Active</span>
+                    <span className="text-[18px] font-semibold font-(--font-mono) text-(--color-text-primary)">{String(activeGoals.length)}</span>
+                  </div>
+                </div>
+              </div>
+              {/* Desktop stat cards */}
+              <div className={`hidden lg:grid gap-3 mb-5 ${{ 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3' }[n] ?? 'lg:grid-cols-2'}`}>
+                <StatCard
+                  label="Total Saved"
+                  value={`$${formatMoney(totalSaved)}`}
+                  variant={totalSaved > 0 ? "success" : "muted"}
+                />
+                {totalTarget > 0 && (
+                  <StatCard label="Total Target" value={`$${formatMoney(totalTarget)}`} />
+                )}
+                <StatCard label="Active Goals" value={String(activeGoals.length)} />
+              </div>
+            </>
           );
         })()}
 

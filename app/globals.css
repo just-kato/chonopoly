@@ -372,3 +372,34 @@ html, body {
   from { offset-distance: 0%;   }
   to   { offset-distance: 100%; }
 }
+
+/* Profile bento grid: all cards collapse to full width below lg.
+   !important required — card column spans are set via inline style. */
+@media (max-width: 1023px) {
+  .profile-bento-grid > * {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* Analytics outer grid: all top-level items collapse to full width on mobile.
+   !important required — gridColumn is set via inline style. */
+@media (max-width: 1023px) {
+  .analytics-bento-grid > * {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* Analytics chart row: 3-col nested grid stacks to single column on mobile */
+@media (max-width: 1023px) {
+  .analytics-chart-row {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto !important;
+  }
+}
+
+/* Analytics investment readiness: 2-col narrative stacks on mobile */
+@media (max-width: 1023px) {
+  .analytics-readiness-narrative {
+    grid-template-columns: 1fr !important;
+  }
+}

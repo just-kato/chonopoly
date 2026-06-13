@@ -147,13 +147,36 @@ export default function ManagePanel({
   }
 
   return (
-    <div className="flex overflow-hidden" style={{ height: "calc(100vh - 40px)" }}>
+    <div className="flex flex-col lg:flex-row overflow-hidden lg:h-[calc(100vh-56px)]">
 
-      {/* ── Secondary sidebar ─────────────────────────────────────────── */}
-      <div
-        className="shrink-0 border-r border-(--color-border-subtle) bg-(--color-base) overflow-y-auto"
-        style={{ width: 180 }}
+      {/* ── Mobile pill strip — hidden on desktop ── */}
+      <nav
+        className="lg:hidden flex overflow-x-auto overflow-y-hidden border-b border-(--color-border-subtle) bg-(--color-base) shrink-0 scrollbar-none"
+        style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
       >
+        <div className="flex gap-1.5 px-4 py-2">
+          {NAV_GROUPS.flatMap(g => g.items).map(({ id, icon: Icon, label }) => {
+            const active = activeSection === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveSection(id)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors border ${
+                  active
+                    ? "bg-(--color-accent)/15 text-(--color-accent) border-(--color-accent)/30"
+                    : "text-(--color-text-secondary) border-transparent hover:text-(--color-text-primary)"
+                }`}
+              >
+                <Icon size={13} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* ── Desktop sidebar — hidden on mobile ── */}
+      <div className="hidden lg:flex lg:flex-col shrink-0 w-45 border-r border-(--color-border-subtle) bg-(--color-base) overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => (
           <div key={group.label}>
             <p
@@ -168,12 +191,11 @@ export default function ManagePanel({
                 <button
                   key={id}
                   onClick={() => setActiveSection(id)}
-                  className={`h-8 px-3 flex items-center gap-2 text-[13px] rounded-sm transition-colors ${
+                  className={`h-8 px-3 flex items-center gap-2 text-[13px] rounded-sm transition-colors w-[calc(100%-16px)] ml-2 ${
                     active
                       ? "text-(--color-text-primary) bg-(--color-border-default) font-medium"
                       : "text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border-subtle)"
                   }`}
-                  style={{ width: "calc(100% - 16px)", marginLeft: 8 }}
                 >
                   <Icon size={14} />
                   {label}
@@ -185,7 +207,7 @@ export default function ManagePanel({
       </div>
 
       {/* ── Content area ──────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 overflow-y-auto px-6 py-5">
+      <div className="flex-1 min-w-0 overflow-y-auto px-6 py-5 pb-16 lg:pb-5">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 mb-4 border-b border-(--color-border-subtle)">
           <p className="font-(--font-display) text-[20px] font-semibold text-(--color-text-primary)">

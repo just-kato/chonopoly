@@ -362,6 +362,7 @@ export default function ActivityChart({ transactions }: ActivityChartProps) {
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
+                minTickGap={40}
               />
               <YAxis
                 tick={{ fill: "var(--color-text-tertiary)", fontSize: 10, fontFamily: "var(--font-mono)" }}

@@ -144,7 +144,7 @@ export default function BudgetTableView({ onEdit }: Props) {
   return (
     <>
       {totals && (
-        <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="grid gap-3 mb-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard label="Total Budgeted" value={`$${formatMoney(totals.total_budgeted)}`} />
           <StatCard
             label="Total Spent"
@@ -159,6 +159,7 @@ export default function BudgetTableView({ onEdit }: Props) {
           />
         </div>
       )}
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -243,6 +244,7 @@ export default function BudgetTableView({ onEdit }: Props) {
         ))}
       </tbody>
     </table>
+      </div>
     </>
   );
 }

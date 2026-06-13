@@ -79,10 +79,10 @@ test("bills summary bar shows totals", async ({ page }) => {
   await goToBills(page);
 
   // Summary stat cards are visible
-  await expect(page.getByText("Due this month")).toBeVisible();
-  await expect(page.getByText("Overdue")).toBeVisible();
+  await expect(page.getByText("Due this month").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("Overdue").filter({ visible: true })).toBeVisible();
   await expect(page.getByText("Paid this cycle")).toBeVisible();
-  await expect(page.getByText("Next bill")).toBeVisible();
+  await expect(page.getByText("Next bill").filter({ visible: true })).toBeVisible();
 });
 
 // ─── Test 2: Bill names render in grid ───────────────────────────────────────
@@ -91,11 +91,11 @@ test("bills grid shows bill names and amounts", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
   await goToBills(page);
 
-  await expect(page.getByText("Netflix").first()).toBeVisible();
-  await expect(page.getByText("Electricity").first()).toBeVisible();
+  await expect(page.getByText("Netflix").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText("Electricity").filter({ visible: true }).first()).toBeVisible();
   // Amount shown
-  await expect(page.getByText(/22\.99/).first()).toBeVisible();
-  await expect(page.getByText(/140\.00/).first()).toBeVisible();
+  await expect(page.getByText(/22\.99/).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/140\.00/).filter({ visible: true }).first()).toBeVisible();
 });
 
 // ─── Test 3: Empty state ──────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ test("chart and calendar view buttons switch views", async ({ page }) => {
   await page.getByRole("button", { name: /calendar/i }).click();
   // Calendar shows weekday headers
   await expect(page.getByText("Sun").first()).toBeVisible();
-  await expect(page.getByText("Mon").first()).toBeVisible();
+  await expect(page.getByText("Mon", { exact: true })).toBeVisible();
 });
 
 // ─── Test 7: Payment history expand ──────────────────────────────────────────

@@ -198,12 +198,13 @@ export default function BillTableView({ onEdit }: Props) {
 
   return (
     <>
-      <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="grid gap-3 mb-5 grid-cols-2 md:grid-cols-4">
         <StatCard label="Due This Month" value={`$${formatMoney(totalDueMonth)}`} variant={totalDueMonth > 0 ? "warning" : "muted"} />
         <StatCard label="Overdue" value={`$${formatMoney(totalOverdue)}`} variant={totalOverdue > 0 ? "danger" : "muted"} />
         <StatCard label="Paid This Cycle" value={`$${formatMoney(paidMonth)}`} variant={paidMonth > 0 ? "success" : "muted"} />
         <StatCard label="Next Bill" value={nextInDays === null ? "—" : nextInDays === 0 ? "Today" : `${nextInDays}d`} variant={nextBillVariant} />
       </div>
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
       <thead>
         <tr>
@@ -277,6 +278,7 @@ export default function BillTableView({ onEdit }: Props) {
         })}
       </tbody>
     </table>
+      </div>
     </>
   );
 }

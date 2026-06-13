@@ -58,7 +58,7 @@ export default function AssetTableView({ activeContext, onEdit: _onEdit }: Props
 
   return (
     <>
-      <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+      <div className="grid gap-3 mb-5 grid-cols-1 sm:grid-cols-2">
         <StatCard label="Gross Value" value={`$${formatMoney(totalAssetValue)}`} />
         <StatCard
           label="Net Equity"
@@ -66,6 +66,7 @@ export default function AssetTableView({ activeContext, onEdit: _onEdit }: Props
           variant={totalNetEquity >= 0 ? "success" : "danger"}
         />
       </div>
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
       <thead>
         <tr>
@@ -122,6 +123,7 @@ export default function AssetTableView({ activeContext, onEdit: _onEdit }: Props
         ))}
       </tbody>
     </table>
+      </div>
     </>
   );
 }

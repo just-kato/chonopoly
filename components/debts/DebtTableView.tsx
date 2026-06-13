@@ -87,10 +87,11 @@ export default function DebtTableView({ activeContext, onEdit: _onEdit }: Props)
 
   return (
     <>
-      <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+      <div className="grid gap-3 mb-5 grid-cols-1 sm:grid-cols-2">
         <StatCard label="Total Owed" value={`$${formatMoney(totalOwed)}`} variant="danger" />
         <StatCard label="Monthly Payment" value={`$${formatMoney(totalMonthlyPayment)}`} />
       </div>
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
       <thead>
         <tr>
@@ -171,6 +172,7 @@ export default function DebtTableView({ activeContext, onEdit: _onEdit }: Props)
         ))}
       </tbody>
     </table>
+      </div>
     </>
   );
 }

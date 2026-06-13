@@ -631,10 +631,22 @@ const DebtPanel = forwardRef<DebtPanelHandle, Props>(
         const totalOwed = activeDebts.reduce((s, d) => s + d.current_balance, 0);
         const totalMonthlyPayment = activeDebts.reduce((s, d) => s + d.minimum_payment, 0);
         return (
-          <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-            <StatCard label="Total Owed" value={`$${formatMoney(totalOwed)}`} variant="danger" />
-            <StatCard label="Monthly Payment" value={`$${formatMoney(totalMonthlyPayment)}`} />
-          </div>
+          <>
+            <div className="lg:hidden grid grid-cols-2 gap-2 mb-5">
+              <div className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl px-4 py-3">
+                <p className="text-[11px] text-[#55534e] mb-0.5">Total Owed</p>
+                <p className="text-[18px] font-semibold font-(--font-mono) text-red-400">${formatMoney(totalOwed)}</p>
+              </div>
+              <div className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl px-4 py-3">
+                <p className="text-[11px] text-[#55534e] mb-0.5">Monthly</p>
+                <p className="text-[18px] font-semibold font-(--font-mono) text-white">${formatMoney(totalMonthlyPayment)}</p>
+              </div>
+            </div>
+            <div className="hidden lg:grid gap-3 mb-5 grid-cols-2">
+              <StatCard label="Total Owed" value={`$${formatMoney(totalOwed)}`} variant="danger" />
+              <StatCard label="Monthly Payment" value={`$${formatMoney(totalMonthlyPayment)}`} />
+            </div>
+          </>
         );
       })()}
       {/* Avalanche warning */}
@@ -689,11 +701,31 @@ const DebtPanel = forwardRef<DebtPanelHandle, Props>(
       {!loading && activeDebts.map((debt, idx) => (
         <div
           key={debt.id}
-          className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl p-4 space-y-3 cursor-pointer hover:border-white/10 transition-colors"
+          className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl p-4 cursor-pointer hover:border-white/10 transition-colors"
           onClick={() => { setDetailId(debt.id); setView("detail"); }}
           data-testid="debt-card"
         >
-          <div className="flex items-start justify-between">
+          {/* Mobile debt row */}
+          <div className="lg:hidden flex items-center gap-3 mb-3">
+            <span className="text-[28px] w-10 h-10 flex items-center justify-center shrink-0">{debt.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-white truncate">{debt.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/6 text-[#7a7870]">
+                  {DEBT_TYPE_META[debt.debt_type]?.label ?? debt.debt_type}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 font-(--font-mono)">
+                  {debt.interest_rate}% APR
+                </span>
+                {idx === 0 && activeDebts.length > 1 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Priority #1</span>
+                )}
+              </div>
+            </div>
+            <p className="shrink-0 text-[20px] font-semibold font-(--font-mono) text-white">${formatMoney(debt.current_balance)}</p>
+          </div>
+          {/* Desktop debt row — unchanged */}
+          <div className="hidden lg:flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
               <span className="text-xl">{debt.icon}</span>
               <div>
@@ -716,14 +748,14 @@ const DebtPanel = forwardRef<DebtPanelHandle, Props>(
               </div>
             </div>
             {/* Up/down reorder */}
-            <div className="flex flex-col gap-0.5 ml-2" onClick={e => e.stopPropagation()}>
+            <div className="hidden lg:flex flex-col gap-0.5 ml-2" onClick={e => e.stopPropagation()}>
               <button disabled={idx === 0 || reordering} onClick={() => moveDebt(debt, "up")} className="p-1 text-[#55534e] hover:text-white disabled:opacity-20 transition-colors"><ArrowUp size={12} /></button>
               <button disabled={idx === activeDebts.length - 1 || reordering} onClick={() => moveDebt(debt, "down")} className="p-1 text-[#55534e] hover:text-white disabled:opacity-20 transition-colors"><ArrowDown size={12} /></button>
             </div>
           </div>
 
           {/* Progress bar */}
-          <div className="space-y-1">
+          <div className="space-y-1 mb-3">
             <div className="flex items-center justify-between text-[10px] text-[#55534e]">
               <span>{Math.round(debt.percent_paid)}% paid off</span>
               <span className="font-(--font-mono) text-red-400">${formatMoney(debt.monthly_interest)}/mo interest</span>

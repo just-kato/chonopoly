@@ -95,7 +95,7 @@ function OverviewStatCard({ label, value, color = "text-(--color-text-primary)" 
   return (
     <div className="flex-1 bg-(--color-elevated) border border-(--color-border-default) rounded-md flex flex-col justify-center px-[14px] shadow-(--shadow-sm)" style={{ height: 64 }}>
       <p className="text-[9px] text-(--color-text-tertiary) uppercase tracking-[0.1em] mb-1">{label}</p>
-      <p className={`text-[20px] font-semibold font-(--font-display) ${color}`}>{value}</p>
+      <p className={`text-[16px] sm:text-[20px] font-semibold font-(--font-display) truncate ${color}`}>{value}</p>
     </div>
   );
 }
@@ -214,7 +214,7 @@ function NetWorthCard({ activeContext }: { activeContext: ActiveContext }) {
           {isPositive ? "" : "-"}${formatMoney(Math.abs(data.net_worth))}
         </p>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center max-md:hidden">
         <p className="text-[9px] text-(--color-text-tertiary) mr-2">Assets − Debts</p>
         <p className="text-[11px] font-(--font-mono) text-(--color-text-secondary)">${formatMoney(data.total_assets)} − ${formatMoney(data.total_debts)}</p>
       </div>
@@ -361,19 +361,20 @@ function OverviewPanel({ transactions, accountMap, categoryOverrides, onChangeCa
       <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-hidden">
 
         {/* Row 1: Three stat cards */}
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="grid grid-cols-3 gap-2 flex-shrink-0">
           <OverviewStatCard label="Liquid cash"  value={`$${formatMoney(totalBalance)}`} />
           <OverviewStatCard label="Spent (30d)"  value={`$${formatMoney(totalSpent)}`}  color="text-(--color-danger)" />
           <OverviewStatCard label="Income (30d)" value={`$${formatMoney(totalIncome)}`} color="text-(--color-success)" />
         </div>
 
         {/* Row 3: Spending chart + Recent transactions */}
-        <div className="flex gap-2 flex-1 min-h-0">
+        <div className="flex gap-2 flex-1 min-h-0 max-lg:flex-col">
           <div className="flex-1 min-w-0 bg-(--color-surface) border border-(--color-border-default) rounded-md flex flex-col overflow-hidden" style={{ padding: '12px 16px' }}>
             <ActivityChart transactions={transactions} />
           </div>
 
-          <div className="bg-(--color-surface) border border-(--color-border-default) rounded-md flex flex-col overflow-hidden flex-shrink-0" style={{ width: 320, padding: '12px 14px' }}>
+          {/* lg:w-80 (320px) replaces removed inline style={{ width: 320 }} */}
+          <div className="bg-(--color-surface) border border-(--color-border-default) rounded-md flex flex-col overflow-hidden flex-shrink-0 lg:w-80 max-lg:w-full max-lg:h-auto" style={{ padding: '12px 14px' }}>
             <DailyDigest
               transactions={transactions}
               categoryOverrides={categoryOverrides}
@@ -596,7 +597,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
             Merchant
             {sortBy === "merchant-asc" && <span className="text-[9px]">▲</span>}
           </div>
-          <div className="w-40 shrink-0 py-2.5 text-[10px] uppercase tracking-[0.08em] text-(--color-text-secondary) font-medium">
+          <div className="w-40 shrink-0 py-2.5 text-[10px] uppercase tracking-[0.08em] text-(--color-text-secondary) font-medium max-lg:hidden">
             Category
           </div>
           <div
@@ -607,7 +608,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
             {sortBy === "date-desc" && <span className="text-[9px]">▼</span>}
             {sortBy === "date-asc" && <span className="text-[9px]">▲</span>}
           </div>
-          <div className="w-36 shrink-0 py-2.5 text-[10px] uppercase tracking-[0.08em] text-(--color-text-secondary) font-medium">
+          <div className="w-36 shrink-0 py-2.5 text-[10px] uppercase tracking-[0.08em] text-(--color-text-secondary) font-medium max-lg:hidden">
             Account
           </div>
           <div
@@ -676,7 +677,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
               </div>
 
               {/* Category */}
-              <div className="w-40 shrink-0 pr-3">
+              <div className="w-40 shrink-0 pr-3 max-lg:hidden">
                 <CategoryPill category={effectiveCategory} transactionId={tx.transaction_id} onChangeCategory={onChangeCategory} />
               </div>
 
@@ -686,7 +687,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
               </div>
 
               {/* Account */}
-              <div className="w-36 shrink-0 pr-3">
+              <div className="w-36 shrink-0 pr-3 max-lg:hidden">
                 <span className="text-[11px] text-(--color-text-tertiary) truncate block">{acct?.name ?? "—"}</span>
               </div>
 
@@ -900,20 +901,40 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
       {totals && summaries.length > 0 && (() => {
         const pct = totals.total_budgeted > 0 ? totals.total_spent / totals.total_budgeted : 0;
         return (
-          <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-            <StatCard label="Total Budgeted" value={`$${formatMoney(totals.total_budgeted)}`} />
-            <StatCard
-              label="Total Spent"
-              value={`$${formatMoney(totals.total_spent)}`}
-              variant={pct >= 1 ? "danger" : pct >= 0.8 ? "warning" : "default"}
-              subtext={totals.total_budgeted > 0 ? `${Math.round(pct * 100)}% of budget` : undefined}
-            />
-            <StatCard
-              label="Monthly Income"
-              value={`$${formatMoney(totals.monthly_income)}`}
-              variant={totals.monthly_income > 0 ? "success" : "muted"}
-            />
-          </div>
+          <>
+            {/* Mobile summary card */}
+            <div className="lg:hidden rounded-2xl p-4 mb-4 border border-(--color-border-subtle) bg-(--color-elevated)">
+              <div className="flex justify-between items-start">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Budgeted</span>
+                  <span className="text-[18px] font-semibold font-(--font-mono) text-(--color-text-primary)">${formatMoney(totals.total_budgeted)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Spent</span>
+                  <span className={`text-[18px] font-semibold font-(--font-mono) ${pct >= 1 ? "text-(--color-danger)" : pct >= 0.8 ? "text-(--color-warning)" : "text-(--color-text-primary)"}`}>${formatMoney(totals.total_spent)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Income</span>
+                  <span className={`text-[18px] font-semibold font-(--font-mono) ${totals.monthly_income > 0 ? "text-(--color-success)" : "text-(--color-text-tertiary)"}`}>${formatMoney(totals.monthly_income)}</span>
+                </div>
+              </div>
+            </div>
+            {/* Desktop stat cards */}
+            <div className="hidden lg:grid grid-cols-3 gap-3 mb-5">
+              <StatCard label="Total Budgeted" value={`$${formatMoney(totals.total_budgeted)}`} />
+              <StatCard
+                label="Total Spent"
+                value={`$${formatMoney(totals.total_spent)}`}
+                variant={pct >= 1 ? "danger" : pct >= 0.8 ? "warning" : "default"}
+                subtext={totals.total_budgeted > 0 ? `${Math.round(pct * 100)}% of budget` : undefined}
+              />
+              <StatCard
+                label="Monthly Income"
+                value={`$${formatMoney(totals.monthly_income)}`}
+                variant={totals.monthly_income > 0 ? "success" : "muted"}
+              />
+            </div>
+          </>
         );
       })()}
 
@@ -959,7 +980,7 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
               <div
                 key={s.budget_id}
                 onClick={() => selectMode ? toggleSelect(s.budget_id) : setSelectedBudgetId(s.budget_id)}
-                className={`rounded-md border border-l-[3px] px-5 py-4 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 shadow-(--shadow-sm) hover:shadow-(--shadow-md) ${s.status === "paused" ? "opacity-50" : ""} ${selectMode && selected.has(s.budget_id) ? "border-(--color-accent)" : "border-(--color-border-default)"}`}
+                className={`rounded-2xl lg:rounded-md border border-l-[3px] p-4 lg:px-5 lg:py-4 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 shadow-(--shadow-sm) hover:shadow-(--shadow-md) ${s.status === "paused" ? "opacity-50" : ""} ${selectMode && selected.has(s.budget_id) ? "border-(--color-accent)" : "border-(--color-border-default)"}`}
                 style={{
                   borderLeftColor: s.over_budget
                     ? "var(--color-danger)"
@@ -973,128 +994,175 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
                     : "var(--color-surface)",
                 }}
               >
-                {/* Row 1 — Header: icon/checkbox + name + pills | action buttons */}
-                <div className="flex items-center gap-3 mb-3">
-                  {selectMode ? (
-                    <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${selected.has(s.budget_id) ? "border-(--color-accent) bg-(--color-accent)" : "border-(--color-border-strong)"}`}>
-                      {selected.has(s.budget_id) && <span className="text-(--color-base) text-[10px] font-bold">✓</span>}
-                    </div>
-                  ) : (() => { const Icon = getCategoryIcon(s.category_icon); return (
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: s.category_color + "40", color: s.category_color }}
-                    >
-                      <Icon size={16} />
-                    </div>
-                  ); })()}
-                  <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      <p className="text-[14px] font-semibold text-(--color-text-primary)">{s.name ?? s.category_name}</p>
-                      {s.status === "paused" && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-(--radius-pill) bg-(--color-overlay) text-(--color-text-tertiary)">Paused</span>
-                      )}
-                      {(s.notified_80 || s.notified_over) && (
-                        <span title={s.notified_over ? "Over budget alert sent" : "80% alert sent"} className="text-(--color-text-tertiary)">
-                          <Mail size={11} />
-                        </span>
-                      )}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-(--radius-pill) bg-(--color-overlay) text-(--color-text-secondary) capitalize">
-                        {s.period_type}
-                      </span>
-                      {s.transaction_count > 0 && (
-                        <span className="text-[10px] text-(--color-text-tertiary)">{s.transaction_count} txn{s.transaction_count !== 1 ? "s" : ""}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); pauseBudget(s.budget_id, s.status); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-md text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-white/5 transition-colors"
-                        title={s.status === "paused" ? "Resume budget" : "Pause budget"}
-                      >
-                        {s.status === "paused" ? <Play size={13} /> : <Pause size={13} />}
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setEditingBudget(s); setWizardOpen(true); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-md text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-white/5 transition-colors"
-                        title="Edit budget"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteBudget(s.budget_id); }}
-                        disabled={deletingId === s.budget_id}
-                        className="w-7 h-7 flex items-center justify-center rounded-md text-(--color-text-tertiary) hover:text-(--color-danger) hover:bg-red-500/5 disabled:opacity-40 transition-colors"
-                        title="Delete budget"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Row 2 — Progress bar + spent/limit + percentage */}
-                <div className="mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-[6px] bg-(--color-border-subtle) rounded-full overflow-hidden">
+                {/* Mobile card layout */}
+                <div className="lg:hidden">
+                  {/* Row 1: Avatar | Name + period | Percentage */}
+                  <div className="flex items-center gap-3 mb-2">
+                    {selectMode ? (
+                      <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${selected.has(s.budget_id) ? "border-(--color-accent) bg-(--color-accent)" : "border-(--color-border-strong)"}`}>
+                        {selected.has(s.budget_id) && <span className="text-(--color-base) text-[10px] font-bold">✓</span>}
+                      </div>
+                    ) : (() => { const Icon = getCategoryIcon(s.category_icon); return (
                       <div
-                        className="h-full rounded-full progress-bar-animate"
-                        style={{
-                          "--bar-width": `${Math.min(s.percent_used, 100)}%`,
-                          background: s.percent_used >= 100 ? "var(--color-danger)" : s.percent_used >= 80 ? "var(--color-warning, #f59e0b)" : "var(--color-accent)",
-                        } as React.CSSProperties}
-                      />
+                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: s.category_color + "40", color: s.category_color }}
+                      >
+                        <Icon size={18} />
+                      </div>
+                    ); })()}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold text-(--color-text-primary) truncate">{s.name ?? s.category_name}</p>
+                      <p className="text-[12px] text-(--color-text-tertiary) capitalize">{s.period_type}</p>
                     </div>
-                    <span className="text-[12px] font-(--font-mono) text-(--color-text-secondary) shrink-0">
-                      ${formatMoney(s.amount_spent)} / ${formatMoney(s.effective_limit)}
-                    </span>
-                    <span className={`text-[13px] font-semibold shrink-0 ${s.percent_used >= 100 ? "text-(--color-danger)" : s.percent_used >= 80 ? "text-(--color-warning)" : "text-(--color-accent)"}`}>
+                    <span className={`shrink-0 text-[18px] font-semibold font-(--font-mono) ${s.percent_used >= 100 ? "text-(--color-danger)" : s.percent_used >= 80 ? "text-(--color-warning)" : "text-(--color-accent)"}`}>
                       {Math.round(s.percent_used)}%
                     </span>
                   </div>
-                </div>
-
-                {/* Row 3 — Daily rate / over amount | days remaining */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    {s.over_budget ? (
-                      <p className="text-[13px] font-semibold text-(--color-danger)">${formatMoney(s.amount_spent - s.effective_limit)} over limit</p>
-                    ) : s.status === "paused" ? (
-                      <p className="text-[13px] text-(--color-text-tertiary)">Paused</p>
-                    ) : (
-                      <p>
-                        <span className="text-[13px] font-semibold text-(--color-text-primary)">${formatMoney(s.daily_rate)}/day</span>
-                        <span className="text-[11px] text-(--color-text-tertiary) ml-1">remaining</span>
-                      </p>
-                    )}
+                  {/* Row 2: Progress bar */}
+                  <div className="h-[6px] bg-(--color-border-subtle) rounded-full overflow-hidden mb-2">
+                    <div
+                      className="h-full rounded-full progress-bar-animate"
+                      style={{
+                        "--bar-width": `${Math.min(s.percent_used, 100)}%`,
+                        background: s.percent_used >= 100 ? "var(--color-danger)" : s.percent_used >= 80 ? "var(--color-warning, #f59e0b)" : "var(--color-accent)",
+                      } as React.CSSProperties}
+                    />
                   </div>
-                  <p className={`text-[11px] ${s.days_remaining < 5 ? "text-(--color-danger)" : "text-(--color-text-tertiary)"}`}>
-                    {s.days_remaining === 0 ? "ends today" : `${s.days_remaining}d left`} · ends {formatDate(s.period_end)}
-                  </p>
+                  {/* Row 3: Spent / limit · status */}
+                  <div className="flex items-center justify-between text-[12px] text-(--color-text-tertiary)">
+                    <span className="font-(--font-mono)">${formatMoney(s.amount_spent)} / ${formatMoney(s.effective_limit)}</span>
+                    <span className={s.over_budget ? "text-(--color-danger)" : ""}>
+                      {s.over_budget ? `$${formatMoney(s.amount_spent - s.effective_limit)} over` : s.status === "paused" ? "Paused" : `${s.days_remaining}d left`}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Nudge — subtle inline row */}
-                {s.days_remaining < 2 && s.amount_remaining > 0 && !s.nudge_sent && s.status !== "paused" && (
-                  <div className="mt-3 pt-3 border-t border-(--color-border-subtle) flex items-center gap-2 nudge-appear">
-                    <span className="text-[13px]">💡</span>
-                    <p className="flex-1 text-[12px] text-(--color-text-secondary) leading-snug">
-                      Period ends soon — move <span className="font-(--font-mono)">${formatMoney(s.amount_remaining)}</span> to your savings goal?
+                {/* Desktop card layout — unchanged */}
+                <div className="hidden lg:block">
+                  {/* Row 1 — Header: icon/checkbox + name + pills | action buttons */}
+                  <div className="flex items-center gap-3 mb-3">
+                    {selectMode ? (
+                      <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${selected.has(s.budget_id) ? "border-(--color-accent) bg-(--color-accent)" : "border-(--color-border-strong)"}`}>
+                        {selected.has(s.budget_id) && <span className="text-(--color-base) text-[10px] font-bold">✓</span>}
+                      </div>
+                    ) : (() => { const Icon = getCategoryIcon(s.category_icon); return (
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: s.category_color + "40", color: s.category_color }}
+                      >
+                        <Icon size={16} />
+                      </div>
+                    ); })()}
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <p className="text-[14px] font-semibold text-(--color-text-primary)">{s.name ?? s.category_name}</p>
+                        {s.status === "paused" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-(--radius-pill) bg-(--color-overlay) text-(--color-text-tertiary)">Paused</span>
+                        )}
+                        {(s.notified_80 || s.notified_over) && (
+                          <span title={s.notified_over ? "Over budget alert sent" : "80% alert sent"} className="text-(--color-text-tertiary)">
+                            <Mail size={11} />
+                          </span>
+                        )}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-(--radius-pill) bg-(--color-overlay) text-(--color-text-secondary) capitalize">
+                          {s.period_type}
+                        </span>
+                        {s.transaction_count > 0 && (
+                          <span className="text-[10px] text-(--color-text-tertiary)">{s.transaction_count} txn{s.transaction_count !== 1 ? "s" : ""}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); pauseBudget(s.budget_id, s.status); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-md text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-white/5 transition-colors"
+                          title={s.status === "paused" ? "Resume budget" : "Pause budget"}
+                        >
+                          {s.status === "paused" ? <Play size={13} /> : <Pause size={13} />}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingBudget(s); setWizardOpen(true); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-md text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-white/5 transition-colors"
+                          title="Edit budget"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteBudget(s.budget_id); }}
+                          disabled={deletingId === s.budget_id}
+                          className="w-7 h-7 flex items-center justify-center rounded-md text-(--color-text-tertiary) hover:text-(--color-danger) hover:bg-red-500/5 disabled:opacity-40 transition-colors"
+                          title="Delete budget"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 2 — Progress bar + spent/limit + percentage */}
+                  <div className="mb-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <div className="w-full lg:flex-1 lg:w-auto h-[6px] bg-(--color-border-subtle) rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full progress-bar-animate"
+                          style={{
+                            "--bar-width": `${Math.min(s.percent_used, 100)}%`,
+                            background: s.percent_used >= 100 ? "var(--color-danger)" : s.percent_used >= 80 ? "var(--color-warning, #f59e0b)" : "var(--color-accent)",
+                          } as React.CSSProperties}
+                        />
+                      </div>
+                      <span className="text-[12px] font-(--font-mono) text-(--color-text-secondary) shrink-0">
+                        ${formatMoney(s.amount_spent)} / ${formatMoney(s.effective_limit)}
+                      </span>
+                      <span className={`text-[13px] font-semibold shrink-0 ml-auto lg:ml-0 ${s.percent_used >= 100 ? "text-(--color-danger)" : s.percent_used >= 80 ? "text-(--color-warning)" : "text-(--color-accent)"}`}>
+                        {Math.round(s.percent_used)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 3 — Daily rate / over amount | days remaining */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {s.over_budget ? (
+                        <p className="text-[13px] font-semibold text-(--color-danger)">${formatMoney(s.amount_spent - s.effective_limit)} over limit</p>
+                      ) : s.status === "paused" ? (
+                        <p className="text-[13px] text-(--color-text-tertiary)">Paused</p>
+                      ) : (
+                        <p>
+                          <span className="text-[13px] font-semibold text-(--color-text-primary)">${formatMoney(s.daily_rate)}/day</span>
+                          <span className="text-[11px] text-(--color-text-tertiary) ml-1">remaining</span>
+                        </p>
+                      )}
+                    </div>
+                    <p className={`text-[11px] ${s.days_remaining < 5 ? "text-(--color-danger)" : "text-(--color-text-tertiary)"}`}>
+                      {s.days_remaining === 0 ? "ends today" : `${s.days_remaining}d left`} · ends {formatDate(s.period_end)}
                     </p>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        await fetch("/api/budget/nudge", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ budget_name: s.name ?? s.category_name, amount_remaining: s.amount_remaining }),
-                        });
-                        setSummaries(prev => prev.map(b => b.budget_id === s.budget_id ? { ...b, nudge_sent: true } : b));
-                      }}
-                      className="shrink-0 text-[12px] font-medium text-(--color-accent) hover:opacity-80 transition-opacity cursor-pointer"
-                    >
-                      Confirm
-                    </button>
                   </div>
-                )}
+
+                  {/* Nudge — subtle inline row */}
+                  {/* mobile: nudge hidden — acceptable tradeoff */}
+                  {s.days_remaining < 2 && s.amount_remaining > 0 && !s.nudge_sent && s.status !== "paused" && (
+                    <div className="mt-3 pt-3 border-t border-(--color-border-subtle) flex items-center gap-2 nudge-appear">
+                      <span className="text-[13px]">💡</span>
+                      <p className="flex-1 text-[12px] text-(--color-text-secondary) leading-snug">
+                        Period ends soon — move <span className="font-(--font-mono)">${formatMoney(s.amount_remaining)}</span> to your savings goal?
+                      </p>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await fetch("/api/budget/nudge", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ budget_name: s.name ?? s.category_name, amount_remaining: s.amount_remaining }),
+                          });
+                          setSummaries(prev => prev.map(b => b.budget_id === s.budget_id ? { ...b, nudge_sent: true } : b));
+                        }}
+                        className="shrink-0 text-[12px] font-medium text-(--color-accent) hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1299,7 +1367,7 @@ function AnalyticsPanel({
   const invColor = investable_assets >= 0 ? "text-(--color-success)" : "text-(--color-danger)";
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gridAutoRows: "auto", gap: "12px", padding: "20px", alignContent: "start", minHeight: "calc(100vh - 40px)" }}>
+    <div className="analytics-bento-grid" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gridAutoRows: "auto", gap: "12px", padding: "20px", alignContent: "start", minHeight: "calc(100vh - 56px)" }}>
 
       {/* Row 1 — Financial Health */}
       {/* Left — Savings Rate */}
@@ -1410,7 +1478,7 @@ function AnalyticsPanel({
       </div>
 
       {/* Row 3 — Main data row (3-col, locked height) */}
-      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr", gridTemplateRows: "420px", gap: "12px", alignItems: "stretch" }}>
+      <div className="analytics-chart-row" style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr", gridTemplateRows: "420px", gap: "12px", alignItems: "stretch" }}>
 
         {/* Col 1 — By Category */}
         <div className="bg-(--color-elevated) border border-(--color-border-default) rounded-md overflow-hidden flex flex-col relative">
@@ -1534,7 +1602,7 @@ function AnalyticsPanel({
         return (
           <div className="bg-(--color-surface) border border-(--color-border-default) rounded-(--radius-lg) p-5" style={{ gridColumn: "1 / 13" }}>
             {/* Row A — Narrative */}
-            <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <div className="grid gap-6 mb-6 analytics-readiness-narrative" style={{ gridTemplateColumns: "1fr 1fr" }}>
 
               {/* Row A Left — Label + heading + state message */}
               <div className="flex flex-col">
@@ -1600,7 +1668,7 @@ function AnalyticsPanel({
                   <span key={m}>{m}%</span>
                 ))}
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   ["Current investable assets", `$${formatMoney(Math.max(investable_assets, 0))}`],
                   ["Monthly savings rate", `$${formatMoney(savings_rate_dollar)} / mo`],
@@ -1869,11 +1937,11 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   }
 
   return (
-    <div className="flex min-h-screen bg-(--color-base) text-(--color-text-primary)">
+    <div className="flex min-h-screen overflow-x-hidden bg-(--color-base) text-(--color-text-primary)">
 
-      {/* Sidebar */}
+      {/* Sidebar — desktop only; hidden on mobile (bottom tab bar handles primary nav) */}
       <aside
-        className="w-56 shrink-0 flex flex-col bg-(--color-base) border-r border-(--color-border-subtle) min-h-screen self-stretch overflow-hidden"
+        className="hidden lg:flex lg:flex-col w-56 shrink-0 min-h-screen self-stretch bg-(--color-base) border-r border-(--color-border-subtle) overflow-hidden"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")`,
           backgroundSize: "200px 200px",
@@ -1924,6 +1992,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
           );
         })()}
 
+        {/* TODO: mobile — context switcher not accessible on mobile nav; needs a home in ProfilePanel or a mobile sheet */}
         {/* Context switcher */}
         <div className="px-4 pt-2 pb-1">
           <p className="px-0 pt-3 pb-1.5 text-[10px] text-(--color-text-disabled) uppercase tracking-[0.1em]">Context</p>
@@ -2062,15 +2131,41 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      {/* Main content — min-w-0 prevents flex child from overflowing on mobile */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden pt-14 lg:pt-0">
+
+        {/* Mobile top bar — identity + avatar; no hamburger */}
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-(--color-base) border-b border-(--color-border-subtle) flex items-center justify-between px-4 shrink-0">
+          <span className="text-[10px] uppercase tracking-[0.12em] text-(--color-text-disabled) font-medium">
+            Park Properties
+          </span>
+          {userProfile && (() => {
+            const c = getAvatarColors(userProfile.avatarColor);
+            const initials = userProfile.name ? userProfile.name.slice(0, 2).toUpperCase() : "··";
+            return (
+              <button
+                onClick={() => navTo("profile")}
+                aria-label="Open profile"
+                className="flex items-center"
+              >
+                <div className={`w-8 h-8 rounded-full shrink-0 border overflow-hidden flex items-center justify-center ${c.bg} ${c.border}`}>
+                  {userProfile.avatarUrl
+                    ? <img src={userProfile.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    : <span className={`${c.text} font-(--font-mono) font-bold text-[10px]`}>{initials}</span>
+                  }
+                </div>
+              </button>
+            );
+          })()}
+        </div>
+
         {view === "overview" && connected.length > 0 && !loading ? (
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-5 py-4">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-5 py-4 pb-18 lg:pb-4">
             {error && <p className="mb-4 shrink-0 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{error}</p>}
             <OverviewPanel {...panelProps} spending={spending} totalBalance={totalBalance} totalSpent={totalSpent} totalIncome={totalIncome} onViewAll={() => navTo("transactions")} activeContext={activeContext} onNavigate={navTo} accounts={accounts} />
           </div>
         ) : (
-          <div className="overflow-y-auto flex-1 w-full px-6 py-8">
+          <div className="overflow-y-auto flex-1 w-full px-6 py-8 pb-22 lg:pb-8">
             {view !== "profile" && view !== "transactions" && view !== "manage" && view !== "overview" && <h1 className="text-[18px] font-semibold mb-6 text-(--color-text-primary)">{viewTitle}</h1>}
             {error && <p className="mb-6 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{error}</p>}
             {view === "overview" && connected.length === 0 && (
@@ -2136,6 +2231,32 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
           </div>
         )}
       </main>
+
+      {/* Mobile bottom tab bar — lg+ uses the sidebar instead */}
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-(--color-base) border-t border-(--color-border-subtle)"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="h-14 flex items-stretch">
+          {navItems.map(({ id, icon, label }) => {
+            const active = view === id;
+            return (
+              <button
+                key={String(id)}
+                onClick={() => navTo(id)}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                  active ? "text-(--color-accent)" : "text-(--color-text-tertiary)"
+                }`}
+              >
+                <div className={`p-1.5 rounded-xl transition-colors ${active ? "bg-(--color-accent)/10" : ""}`}>
+                  {icon}
+                </div>
+                <span className="text-[9px] uppercase tracking-wide font-medium">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
     </div>
   );

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Playfair_Display, IBM_Plex_Sans, IBM_Plex_Mono, Syne, DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -37,6 +37,12 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500"],
   variable: "--font-jetbrains-mono",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "Park Hawkins Properties",

@@ -704,21 +704,20 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
 
   return (
     <div
+      className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3 profile-bento-grid"
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        /* gridTemplateColumns was repeat(3, minmax(0, 1fr)) — moved to Tailwind responsive classes above */
         gridAutoRows: "auto",
         gap: "12px",
         padding: "20px",
-        height: "calc(100vh - 40px)",
-        overflowY: "auto",
         alignContent: "start",
       }}
     >
       {/* ── Identity — locked, always row 1 ─────────────────────────────── */}
       <div
         style={{ gridColumn: "1 / -1" }}
-        className="bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-5 py-3 flex items-center gap-4 shadow-[var(--shadow-sm)]"
+        className="bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-5 py-3 flex items-center flex-wrap gap-x-4 gap-y-3 shadow-(--shadow-sm)"
       >
         <p className="text-[9px] uppercase tracking-widest text-(--color-text-tertiary) shrink-0">Identity</p>
         {/* Avatar 36px */}

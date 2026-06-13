@@ -69,10 +69,16 @@ export default function SpendingChart({ spending }: Props) {
   }
 
   return (
-    <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
+    <div className="flex flex-col lg:flex-1 lg:min-h-0">
       {toggles}
 
-      <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }} onMouseLeave={() => setTooltip(null)}>
+      {/* Mobile: total spent above chart — no overlay on the donut */}
+      <div className="lg:hidden text-center mb-2 shrink-0">
+        <p className="text-[9px] text-(--color-text-tertiary) uppercase tracking-widest">Total spent</p>
+        <p className="text-lg font-semibold" style={{ fontFamily: "var(--font-display)" }}>${formatMoney(total)}</p>
+      </div>
+
+      <div className="relative h-50 lg:h-auto lg:flex-1 flex items-center justify-center" onMouseLeave={() => setTooltip(null)}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -99,7 +105,8 @@ export default function SpendingChart({ spending }: Props) {
           </PieChart>
         </ResponsiveContainer>
 
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        {/* Desktop: total spent centered inside donut */}
+        <div className="hidden lg:flex absolute inset-0 items-center justify-center pointer-events-none">
           <div className="text-center">
             <p className="text-[9px] text-(--color-text-tertiary) uppercase tracking-widest">Total spent</p>
             <p className="text-lg font-semibold" style={{ fontFamily: "var(--font-display)" }}>${formatMoney(total)}</p>
@@ -120,7 +127,7 @@ export default function SpendingChart({ spending }: Props) {
         </div>
       )}
 
-      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 shrink-0">
+      <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-x-3 gap-y-1 shrink-0">
         {data.map((entry, i) => (
           <div key={i} className="flex items-center gap-2 min-w-0">
             <div className="w-2 h-2 rounded-full shrink-0" style={{ background: entry.hex }} />

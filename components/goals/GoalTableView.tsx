@@ -132,11 +132,12 @@ export default function GoalTableView({ activeContext, onEdit }: Props) {
 
   return (
     <>
-      <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: `repeat(${statCols}, 1fr)` }}>
+      <div className={`grid gap-3 mb-5 grid-cols-1 ${{ 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' }[statCols] ?? 'sm:grid-cols-2'}`}>
         <StatCard label="Total Saved" value={`$${formatMoney(totalSaved)}`} variant={totalSaved > 0 ? "success" : "muted"} />
         {totalTarget > 0 && <StatCard label="Total Target" value={`$${formatMoney(totalTarget)}`} />}
         <StatCard label="Active Goals" value={String(activeGoals.length)} />
       </div>
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -228,6 +229,7 @@ export default function GoalTableView({ activeContext, onEdit }: Props) {
           })}
         </tbody>
       </table>
+      </div>
 
       {wizardOpen && (
         <GoalWizard

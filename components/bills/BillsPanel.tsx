@@ -137,28 +137,54 @@ function SummaryBar({ bills }: { bills: Bill[] }) {
         : "default";
 
   return (
-    <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-      <StatCard
-        label="Due This Month"
-        value={`$${formatMoney(totalDueMonth)}`}
-        variant={totalDueMonth > 0 ? "warning" : "muted"}
-      />
-      <StatCard
-        label="Overdue"
-        value={`$${formatMoney(totalOverdue)}`}
-        variant={totalOverdue > 0 ? "danger" : "muted"}
-      />
-      <StatCard
-        label="Paid This Cycle"
-        value={`$${formatMoney(paidMonth)}`}
-        variant={paidMonth > 0 ? "success" : "muted"}
-      />
-      <StatCard
-        label="Next Bill"
-        value={nextInDays === null ? "—" : nextInDays === 0 ? "Today" : `${nextInDays}d`}
-        variant={nextBillVariant}
-      />
-    </div>
+    <>
+      {/* Mobile summary card — 2×2 grid */}
+      <div className="lg:hidden rounded-2xl p-4 mb-4 border border-(--color-border-subtle) bg-(--color-elevated)">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Due This Month</span>
+            <span className={`text-[18px] font-semibold font-(--font-mono) ${totalDueMonth > 0 ? "text-(--color-warning)" : "text-(--color-text-tertiary)"}`}>${formatMoney(totalDueMonth)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Overdue</span>
+            <span className={`text-[18px] font-semibold font-(--font-mono) ${totalOverdue > 0 ? "text-(--color-danger)" : "text-(--color-text-tertiary)"}`}>${formatMoney(totalOverdue)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Paid</span>
+            <span className={`text-[18px] font-semibold font-(--font-mono) ${paidMonth > 0 ? "text-(--color-success)" : "text-(--color-text-tertiary)"}`}>${formatMoney(paidMonth)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary)">Next Bill</span>
+            <span className="text-[18px] font-semibold font-(--font-mono) text-(--color-text-primary)">
+              {nextInDays === null ? "—" : nextInDays === 0 ? "Today" : `${nextInDays}d`}
+            </span>
+          </div>
+        </div>
+      </div>
+      {/* Desktop stat cards */}
+      <div className="hidden lg:grid grid-cols-4 gap-3 mb-5">
+        <StatCard
+          label="Due This Month"
+          value={`$${formatMoney(totalDueMonth)}`}
+          variant={totalDueMonth > 0 ? "warning" : "muted"}
+        />
+        <StatCard
+          label="Overdue"
+          value={`$${formatMoney(totalOverdue)}`}
+          variant={totalOverdue > 0 ? "danger" : "muted"}
+        />
+        <StatCard
+          label="Paid This Cycle"
+          value={`$${formatMoney(paidMonth)}`}
+          variant={paidMonth > 0 ? "success" : "muted"}
+        />
+        <StatCard
+          label="Next Bill"
+          value={nextInDays === null ? "—" : nextInDays === 0 ? "Today" : `${nextInDays}d`}
+          variant={nextBillVariant}
+        />
+      </div>
+    </>
   );
 }
 
@@ -200,44 +226,73 @@ function PanelGridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
               const initial = b.name.charAt(0).toUpperCase();
               const color = avatarColor(b.name);
               return (
-                <div key={b.id} className="flex items-center gap-3 px-4 py-3 group cursor-pointer" onClick={() => onBillClick(b)}>
-                  <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold ${color}`}>
-                    {initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] text-(--color-text-primary) truncate">{b.name}</p>
-                    <p className="text-[12px] text-(--color-text-tertiary)">
-                      {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
-                      {b.recurrence !== "one-time" && (
-                        <span className="ml-2 capitalize text-(--color-text-disabled)">{b.recurrence}</span>
+                <div key={b.id}>
+                  {/* Mobile bill row */}
+                  <div className="lg:hidden flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => onBillClick(b)}>
+                    <div className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold ${color}`}>
+                      {initial}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold text-(--color-text-primary) truncate">{b.name}</p>
+                      <p className="text-[12px] text-(--color-text-tertiary)">
+                        {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
+                        {b.recurrence !== "one-time" && ` · ${b.recurrence}`}
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      <p className="text-[18px] font-(--font-mono) font-semibold text-(--color-text-primary)">${formatMoney(b.amount)}</p>
+                      {paid && <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-success)/15 text-(--color-success)">Paid</span>}
+                      {isOverdue && <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-danger)/15 text-(--color-danger)">Overdue</span>}
+                      {!paid && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onMarkPaid(b); }}
+                          className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-accent)/15 text-(--color-accent)"
+                        >
+                          Mark paid
+                        </button>
                       )}
-                    </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {paid && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-success)/15 text-(--color-success)">Paid</span>
-                    )}
-                    {isOverdue && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-danger)/15 text-(--color-danger)">Overdue</span>
-                    )}
-                    {!paid && (
-                      <button
-                        onClick={e => { e.stopPropagation(); onMarkPaid(b); }}
-                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-accent) hover:text-(--color-accent) opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Check size={10} />
-                        Mark paid
-                      </button>
-                    )}
-                    {paid && b.bill_payments.length > 0 && (
-                      <button
-                        onClick={e => { e.stopPropagation(); onMarkUnpaid(b); }}
-                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-warning) hover:text-(--color-warning) opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        Undo
-                      </button>
-                    )}
-                    <p className="text-[15px] font-(--font-mono) text-(--color-text-primary)">${formatMoney(b.amount)}</p>
+                  {/* Desktop bill row — unchanged */}
+                  <div className="hidden lg:flex items-center gap-3 px-4 py-3 group cursor-pointer" onClick={() => onBillClick(b)}>
+                    <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold ${color}`}>
+                      {initial}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] text-(--color-text-primary) truncate">{b.name}</p>
+                      <p className="text-[12px] text-(--color-text-tertiary)">
+                        {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
+                        {b.recurrence !== "one-time" && (
+                          <span className="ml-2 capitalize text-(--color-text-disabled)">{b.recurrence}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {paid && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-success)/15 text-(--color-success)">Paid</span>
+                      )}
+                      {isOverdue && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-danger)/15 text-(--color-danger)">Overdue</span>
+                      )}
+                      {!paid && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onMarkPaid(b); }}
+                          className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-accent) hover:text-(--color-accent) opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Check size={10} />
+                          Mark paid
+                        </button>
+                      )}
+                      {paid && b.bill_payments.length > 0 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onMarkUnpaid(b); }}
+                          className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-warning) hover:text-(--color-warning) opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          Undo
+                        </button>
+                      )}
+                      <p className="text-[15px] font-(--font-mono) text-(--color-text-primary)">${formatMoney(b.amount)}</p>
+                    </div>
                   </div>
                 </div>
               );
@@ -658,7 +713,34 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
 
           return (
             <div key={b.id} data-testid={`bill-row-${b.id}`}>
-              <div className="flex items-center gap-3 px-4 py-3 group cursor-pointer" onClick={() => onBillClick(b)}>
+              {/* Mobile bill row */}
+              <div className="lg:hidden flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => onBillClick(b)}>
+                <div className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold ${color}`}>
+                  {b.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-semibold text-(--color-text-primary) truncate">{b.name}</p>
+                  <p className="text-[12px] text-(--color-text-tertiary) capitalize">
+                    {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
+                    {b.recurrence !== "one-time" && ` · ${b.recurrence}`}
+                  </p>
+                </div>
+                <div className="shrink-0 flex flex-col items-end gap-1">
+                  <p className="text-[18px] font-(--font-mono) font-semibold text-(--color-text-primary)">${formatMoney(b.amount)}</p>
+                  {paid && <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-success)/15 text-(--color-success)">Paid</span>}
+                  {isOverdue && <span className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-danger)/15 text-(--color-danger)">Overdue</span>}
+                  {!paid && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onMarkPaid(b); }}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-(--color-accent)/15 text-(--color-accent)"
+                    >
+                      Mark paid
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Desktop bill row — unchanged */}
+              <div className="hidden lg:flex items-center gap-3 px-4 py-3 group cursor-pointer" onClick={() => onBillClick(b)}>
                 <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold ${color}`}>
                   {b.name.charAt(0).toUpperCase()}
                 </div>

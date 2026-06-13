@@ -29,6 +29,7 @@ const AssetsSection = forwardRef<AssetsSectionHandle, Props>(
   const [view, setView]               = useState<"list" | "wizard">("list");
   const [editingAsset, setEditingAsset] = useState<AssetSummary | null>(null);
   const [deleting, setDeleting]       = useState<string | null>(null);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState<Set<string>>(new Set());
 
   // Wizard state
   const [step, setStep]         = useState<1 | 2 | 3>(1);
@@ -287,14 +288,28 @@ const AssetsSection = forwardRef<AssetsSectionHandle, Props>(
         </button>
       </div>
       {assets.length > 0 && (
-        <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-          <StatCard label="Gross Value" value={`$${formatMoney(totalAssetValue)}`} />
-          <StatCard
-            label="Net Equity"
-            value={totalNetEquity < 0 ? `-$${formatMoney(Math.abs(totalNetEquity))}` : `$${formatMoney(totalNetEquity)}`}
-            variant={totalNetEquity >= 0 ? "success" : "danger"}
-          />
-        </div>
+        <>
+          <div className="lg:hidden grid grid-cols-2 gap-2 mb-5">
+            <div className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl px-4 py-3">
+              <p className="text-[11px] text-[#55534e] mb-0.5">Gross Value</p>
+              <p className="text-[18px] font-semibold font-(--font-mono) text-white">${formatMoney(totalAssetValue)}</p>
+            </div>
+            <div className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl px-4 py-3">
+              <p className="text-[11px] text-[#55534e] mb-0.5">Net Equity</p>
+              <p className={`text-[18px] font-semibold font-(--font-mono) ${totalNetEquity >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {totalNetEquity < 0 ? `-$${formatMoney(Math.abs(totalNetEquity))}` : `$${formatMoney(totalNetEquity)}`}
+              </p>
+            </div>
+          </div>
+          <div className="hidden lg:grid gap-3 mb-5 grid-cols-2">
+            <StatCard label="Gross Value" value={`$${formatMoney(totalAssetValue)}`} />
+            <StatCard
+              label="Net Equity"
+              value={totalNetEquity < 0 ? `-$${formatMoney(Math.abs(totalNetEquity))}` : `$${formatMoney(totalNetEquity)}`}
+              variant={totalNetEquity >= 0 ? "success" : "danger"}
+            />
+          </div>
+        </>
       )}
 
       {loading && (
@@ -317,8 +332,38 @@ const AssetsSection = forwardRef<AssetsSectionHandle, Props>(
       )}
 
       {!loading && assets.map(asset => (
-        <div key={asset.id} className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl p-4 space-y-2" data-testid="asset-card">
-          <div className="flex items-start justify-between">
+        <div key={asset.id} className="bg-[#1e1e24] border border-[#2e2e38] rounded-xl p-4" data-testid="asset-card">
+          {/* Mobile asset row */}
+          <div className="lg:hidden flex items-center gap-3 mb-2">
+            <span className="text-[28px] w-10 h-10 flex items-center justify-center shrink-0">{asset.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-white truncate">{asset.name}</p>
+              <p className="text-[12px] text-[#7a7870]">{ASSET_TYPE_META[asset.asset_type]?.label ?? asset.asset_type}</p>
+            </div>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <p className="text-[20px] font-semibold font-(--font-mono) text-white">${formatMoney(asset.current_value)}</p>
+              <button
+                onClick={e => { e.stopPropagation(); setMobileActionsOpen(prev => { const next = new Set(prev); next.has(asset.id) ? next.delete(asset.id) : next.add(asset.id); return next; }); }}
+                className="text-[11px] text-[#55534e] hover:text-white transition-colors"
+              >
+                •••
+              </button>
+            </div>
+          </div>
+          {mobileActionsOpen.has(asset.id) && (
+            <div className="lg:hidden flex items-center gap-3 pb-2 mb-2 border-b border-[#2e2e38]">
+              <button onClick={() => { openEdit(asset); setMobileActionsOpen(new Set()); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[#7a7870] hover:text-white bg-white/5 rounded-lg transition-colors">
+                <Pencil size={12} /> Edit
+              </button>
+              <button onClick={() => deleteAsset(asset.id)} disabled={deleting === asset.id}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[#7a7870] hover:text-red-400 bg-white/5 rounded-lg transition-colors">
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
+          )}
+          {/* Desktop asset row — unchanged */}
+          <div className="hidden lg:flex items-start justify-between mb-2">
             <div className="flex items-center gap-3">
               <span className="text-xl">{asset.icon}</span>
               <div>

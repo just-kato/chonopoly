@@ -133,10 +133,11 @@ function Step1Panel({
   connectedBankName: string | null;
 }) {
   return (
-    <div className="grid w-full h-full" style={{ gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr' }}>
+    <div className="grid w-full h-full grid-cols-1 md:grid-cols-2">
+      {/* md:grid-cols-2 replaces removed inline style: gridTemplateColumns '1fr 1fr' */}
 
-      {/* Left — preview */}
-      <div className="relative bg-(--color-elevated) flex flex-col justify-center px-8 md:px-12 py-8">
+      {/* Left — preview (hidden on mobile, shown md+) */}
+      <div className="relative bg-(--color-elevated) flex flex-col justify-center px-8 md:px-12 py-8 max-md:hidden">
         {/* PREVIEW watermark */}
         <span
           className="absolute inset-0 flex items-center justify-center text-[80px] font-bold select-none pointer-events-none"

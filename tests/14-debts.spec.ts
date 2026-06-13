@@ -65,8 +65,8 @@ test("debts tab shows empty state with add button", async ({ page }) => {
 test("debt card shows name, APR, and progress", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
   await goToDebts(page);
-  await expect(page.getByText("Chase Sapphire Card")).toBeVisible();
-  await expect(page.getByText(/24.99% APR/i)).toBeVisible();
+  await expect(page.getByText("Chase Sapphire Card").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText(/24.99% APR/i).filter({ visible: true })).toBeVisible();
   await expect(page.getByText(/24% paid off/i)).toBeVisible();
 });
 
@@ -121,7 +121,7 @@ test("wizard creates a debt", async ({ page }) => {
   await expect(page.getByText("My Test Debt")).toBeVisible();
   await page.getByTestId("wizard-debt-create-btn").click();
 
-  await expect(page.getByText("Chase Sapphire Card")).toBeVisible();
+  await expect(page.getByText("Chase Sapphire Card").filter({ visible: true })).toBeVisible();
 });
 
 // ─── Test 4: Detail view shows payoff analytics ───────────────────────────────

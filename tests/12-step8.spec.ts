@@ -51,7 +51,7 @@ async function goToGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
-  await expect(page.getByText("Emergency Fund")).toBeVisible();
+  await expect(page.getByText("Emergency Fund").filter({ visible: true })).toBeVisible();
 }
 
 async function goToEmptyGoals(page: Parameters<typeof stubDataEndpoints>[0]) {

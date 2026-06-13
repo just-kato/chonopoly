@@ -105,7 +105,7 @@ async function goToGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
   await page.getByRole("button", { name: /goals/i }).click();
-  await expect(page.getByText("Emergency Fund")).toBeVisible();
+  await expect(page.getByText("Emergency Fund").filter({ visible: true })).toBeVisible();
 }
 
 // ─── Test 1: wizard opens and shows step 1 ────────────────────────────────────
@@ -198,7 +198,7 @@ test("detail view shows savings and spending sub-sections", async ({ page }) => 
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_ACCOUNTS_GROUPED_SAVINGS_AND_SPENDING) })
   );
 
-  await page.getByText("Emergency Fund").click();
+  await page.getByText("Emergency Fund").filter({ visible: true }).click();
   await expect(page.getByTestId("linked-accounts-section")).toBeVisible();
   await expect(page.getByText("Linked accounts")).toBeVisible();
   await expect(page.getByTestId("savings-account-row")).toBeVisible();
@@ -222,7 +222,7 @@ test("spending remove disabled at 1; savings remove always enabled", async ({ pa
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_ACCOUNTS_ONE_SPENDING_ONLY) })
   );
 
-  await page.getByText("Emergency Fund").click();
+  await page.getByText("Emergency Fund").filter({ visible: true }).click();
   await expect(page.getByTestId("linked-accounts-section")).toBeVisible();
 
   // Last spending account's remove button should be disabled
@@ -242,7 +242,7 @@ test("savings account remove button is never disabled", async ({ page }) => {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_ACCOUNTS_GROUPED_ONE_SAVINGS) })
   );
 
-  await page.getByText("Emergency Fund").click();
+  await page.getByText("Emergency Fund").filter({ visible: true }).click();
   await expect(page.getByTestId("savings-account-row")).toBeVisible();
 
   const savingsRemoveBtn = page.getByTestId("remove-account-ga-1");
@@ -269,7 +269,7 @@ test("Add account button opens picker with role toggle and confirm in detail vie
     })
   );
 
-  await page.getByText("Emergency Fund").click();
+  await page.getByText("Emergency Fund").filter({ visible: true }).click();
   await expect(page.getByTestId("add-account-btn")).toBeVisible();
   await page.getByTestId("add-account-btn").click();
 

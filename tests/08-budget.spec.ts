@@ -90,7 +90,7 @@ test.describe("Budget page — bank connected", () => {
   });
 
   test("shows account balance", async ({ page }) => {
-    await expect(page.getByText("Checking")).toBeVisible();
+    await expect(page.getByText("Checking").first()).toBeVisible();
     await expect(page.getByText("$2,450.00").first()).toBeVisible();
   });
 

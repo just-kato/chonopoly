@@ -42,9 +42,15 @@ export default function DailyDigest({ transactions, categoryOverrides, onViewAll
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
 
+  function isSameDay(a: Date, b: Date): boolean {
+    return a.getFullYear() === b.getFullYear() &&
+           a.getMonth()    === b.getMonth()    &&
+           a.getDate()     === b.getDate();
+  }
+
   function dateLabel(d: Date): string {
-    if (d.getTime() === today.getTime()) return "Today";
-    if (d.getTime() === yesterday.getTime()) return "Yesterday";
+    if (isSameDay(d, today))     return "Today";
+    if (isSameDay(d, yesterday)) return "Yesterday";
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 

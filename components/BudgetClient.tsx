@@ -360,8 +360,8 @@ function OverviewPanel({ transactions, accountMap, categoryOverrides, onChangeCa
 
       <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-hidden">
 
-        {/* Row 1: Three stat cards */}
-        <div className="grid grid-cols-3 gap-2 flex-shrink-0">
+        {/* Row 1: Three stat cards — desktop only; mobile shows hero block instead */}
+        <div className="hidden lg:grid grid-cols-3 gap-2 flex-shrink-0">
           <OverviewStatCard label="Liquid cash"  value={`$${formatMoney(totalBalance)}`} />
           <OverviewStatCard label="Spent (30d)"  value={`$${formatMoney(totalSpent)}`}  color="text-(--color-danger)" />
           <OverviewStatCard label="Income (30d)" value={`$${formatMoney(totalIncome)}`} color="text-(--color-success)" />
@@ -1755,6 +1755,9 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const [error, setError] = useState<string | null>(null);
   const [fetchTick, setFetchTick] = useState(0);
   const [view, setView] = useState<ViewState>("overview");
+  const [mobileOverviewTab, setMobileOverviewTab] = useState<'activity' | 'recent' | 'bills' | 'budgets'>('activity');
+  // Prevents desktop OverviewPanel (and its OnboardingChecklist) from mounting on mobile
+  const [isDesktop, setIsDesktop] = useState(false);
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, string>>({});
   const [pendingDebtLink, setPendingDebtLink] = useState<string | null>(null);
   const budgetCreateRef = useRef<(() => void) | null>(null);
@@ -1824,9 +1827,27 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
       .catch(() => {});
   }, []);
 
-  const refresh = useCallback(() => {
+  const [syncing, setSyncing] = useState(false);
+
+  // Signals the next fetchTick effect to use ?live=true (accountsBalanceGet)
+  const liveRef = useRef(false);
+
+  const refresh = useCallback(async () => {
+    setSyncing(true);
     setLoading(true);
+    await fetch("/api/plaid/sync", { method: "POST" });
+    setSyncing(false);
+    liveRef.current = true;
     setFetchTick((n) => n + 1);
+  }, []);
+
+  // Track desktop viewport to prevent OverviewPanel (and OnboardingChecklist) from mounting on mobile
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    setIsDesktop(mq.matches);
+    const fn = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
   }, []);
 
   // Re-verify connected Plaid items client-side so Playwright tests can mock rest/v1/plaid_items
@@ -1837,10 +1858,32 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
     });
   }, []);
 
+  // Silently sync transactions on mount if last sync was >30 minutes ago
+  useEffect(() => {
+    const syncIfStale = async () => {
+      const supabase = createSupabaseClient();
+      const { data } = await supabase
+        .from("plaid_items")
+        .select("last_synced_at")
+        .eq("user_id", userId)
+        .limit(1)
+        .single();
+      const lastSync = data?.last_synced_at ? new Date(data.last_synced_at as string) : null;
+      const isStale = !lastSync || (Date.now() - lastSync.getTime()) > 30 * 60 * 1000;
+      if (isStale) {
+        await fetch("/api/plaid/sync", { method: "POST" });
+        setFetchTick((n) => n + 1);
+      }
+    };
+    syncIfStale();
+  }, [userId]);
+
   useEffect(() => {
     if (connected.length === 0) return;
     let alive = true;
-    fetch("/api/plaid/transactions")
+    const live = liveRef.current;
+    liveRef.current = false;
+    fetch(`/api/plaid/transactions${live ? '?live=true' : ''}`)
       .then((r) => { if (!r.ok) throw new Error("Failed to load"); return r.json(); })
       .then((d) => {
         if (!alive) return;
@@ -2112,8 +2155,8 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         {/* Bottom actions */}
         <div className="mt-auto px-4 py-4 border-t border-(--color-border-subtle) space-y-1">
           {connected.length > 0 && (
-            <button onClick={refresh} disabled={loading} className="flex items-center gap-2 h-8 text-[12px] text-(--color-text-secondary) hover:text-(--color-text-primary) disabled:opacity-40 transition-colors">
-              <RefreshCw size={14} className={loading ? "animate-spin text-(--color-accent)" : ""} />
+            <button onClick={refresh} disabled={loading || syncing} className="flex items-center gap-2 h-8 text-[12px] text-(--color-text-secondary) hover:text-(--color-text-primary) disabled:opacity-40 transition-colors">
+              <RefreshCw size={14} className={syncing || loading ? "animate-spin text-(--color-accent)" : ""} />
               Refresh
             </button>
           )}
@@ -2139,6 +2182,17 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
           <span className="text-[10px] uppercase tracking-[0.12em] text-(--color-text-disabled) font-medium">
             Park Properties
           </span>
+          <div className="flex items-center gap-2">
+            {connected.length > 0 && (
+              <button
+                onClick={refresh}
+                disabled={loading || syncing}
+                aria-label="Refresh data"
+                className="flex items-center justify-center w-8 h-8 text-(--color-text-secondary) hover:text-(--color-text-primary) disabled:opacity-40 transition-colors"
+              >
+                <RefreshCw size={16} className={syncing || loading ? "animate-spin text-(--color-accent)" : ""} />
+              </button>
+            )}
           {userProfile && (() => {
             const c = getAvatarColors(userProfile.avatarColor);
             const initials = userProfile.name ? userProfile.name.slice(0, 2).toUpperCase() : "··";
@@ -2157,13 +2211,114 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               </button>
             );
           })()}
+          </div>
         </div>
 
         {view === "overview" && connected.length > 0 && !loading ? (
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-5 py-4 pb-18 lg:pb-4">
-            {error && <p className="mb-4 shrink-0 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{error}</p>}
-            <OverviewPanel {...panelProps} spending={spending} totalBalance={totalBalance} totalSpent={totalSpent} totalIncome={totalIncome} onViewAll={() => navTo("transactions")} activeContext={activeContext} onNavigate={navTo} accounts={accounts} />
-          </div>
+          <>
+            {error && <p className="mb-4 shrink-0 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mx-5 mt-4">{error}</p>}
+
+            {/* ── Mobile Overview ── lg:hidden ─────────────────────────────── */}
+            <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden">
+
+              {/* Section 1: Hero balance */}
+              <div className="px-5 pt-4 pb-2 flex-shrink-0">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-(--color-accent) font-medium mb-1">Liquid Cash</p>
+                <p className="text-[52px] font-bold font-(--font-mono) text-(--color-text-primary) leading-none">
+                  ${formatMoney(totalBalance)}
+                </p>
+                {accounts[0] && (
+                  <p className="text-[13px] text-(--color-text-tertiary) mt-1">
+                    {accounts[0].institution_name} · {accounts[0].subtype ?? accounts[0].type}
+                  </p>
+                )}
+                <div className="border-t border-(--color-border-subtle) my-4" />
+                <div className="flex justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-(--color-text-tertiary)">Spent (30D)</p>
+                    <p className={`text-[15px] font-semibold font-(--font-mono) ${totalSpent > 0 ? 'text-(--color-danger)' : ''}`}>
+                      ${formatMoney(totalSpent)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-(--color-text-tertiary)">Income (30D)</p>
+                    <p className={`text-[15px] font-semibold font-(--font-mono) ${totalIncome > 0 ? 'text-(--color-success)' : ''}`}>
+                      ${formatMoney(totalIncome)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-(--color-text-tertiary)">Net</p>
+                    {(() => {
+                      const net = totalIncome - totalSpent;
+                      return (
+                        <p className={`text-[15px] font-semibold font-(--font-mono) ${net >= 0 ? 'text-(--color-accent)' : 'text-(--color-danger)'}`}>
+                          {net >= 0 ? '+' : '-'}${formatMoney(Math.abs(net))}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Tab strip */}
+              <nav
+                className="flex overflow-x-auto scrollbar-none border-b border-(--color-border-subtle) flex-shrink-0"
+                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              >
+                <div className="flex gap-1.5 px-4 py-2">
+                  {(['activity', 'recent', 'bills', 'budgets'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setMobileOverviewTab(tab)}
+                      className={`inline-flex items-center px-4 py-2 rounded-full text-[13px] font-medium whitespace-nowrap shrink-0 border transition-colors ${
+                        mobileOverviewTab === tab
+                          ? 'bg-(--color-accent)/15 text-(--color-accent) border-(--color-accent)/30'
+                          : 'text-(--color-text-secondary) border-transparent'
+                      }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </nav>
+
+              {/* Section 3: Tab content */}
+              <div className="flex-1 overflow-y-auto pb-20">
+                {mobileOverviewTab === 'activity' && (
+                  <div className="p-4">
+                    <ActivityChart transactions={transactions} />
+                  </div>
+                )}
+                {mobileOverviewTab === 'recent' && (
+                  <div className="p-4 w-full">
+                    <DailyDigest
+                      transactions={transactions}
+                      categoryOverrides={categoryOverrides}
+                      onViewAll={() => navTo("transactions")}
+                      onRecategorize={changeCategory}
+                    />
+                  </div>
+                )}
+                {mobileOverviewTab === 'bills' && (
+                  <div className="p-4">
+                    <BillsWidget accounts={accounts} />
+                  </div>
+                )}
+                {mobileOverviewTab === 'budgets' && (
+                  <div className="p-4">
+                    <BudgetsPanel onGoTo={navTo} activeContext={activeContext} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Desktop Overview — only mounts on desktop; gated via JS so OnboardingChecklist effects don't fire on mobile ── */}
+            {isDesktop && (
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-5 py-4 lg:pb-4">
+                <OverviewPanel {...panelProps} spending={spending} totalBalance={totalBalance} totalSpent={totalSpent} totalIncome={totalIncome} onViewAll={() => navTo("transactions")} activeContext={activeContext} onNavigate={navTo} accounts={accounts} />
+              </div>
+            )}
+          </>
         ) : (
           <div className="overflow-y-auto flex-1 w-full px-6 py-8 pb-22 lg:pb-8">
             {view !== "profile" && view !== "transactions" && view !== "manage" && view !== "overview" && <h1 className="text-[18px] font-semibold mb-6 text-(--color-text-primary)">{viewTitle}</h1>}

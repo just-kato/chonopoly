@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   // Read transactions from local DB — no Plaid call; use POST /api/plaid/sync to populate
   const startDate = daysAgo(days);
-  const activeItemIds = items.map(i => i.item_id);
+  const activeItemIds = items.filter(i => !i.access_token.startsWith('access-sandbox-')).map(i => i.item_id);
   const { data: txRows } = await db
     .from("plaid_transactions")
     .select("plaid_transaction_id, plaid_account_id, merchant_name, amount, date, category_primary, category_detailed, pending, currency_code")
@@ -57,10 +57,17 @@ export async function GET(request: Request) {
       : null,
   }));
 
-  // Accounts come from Plaid — fast accountsGet (balances only, no transaction history)
+  const live = url.searchParams.get('live') === 'true';
+
+  // Skip sandbox rows — they fail silently against production API endpoints
+  const activeItems = items.filter(i => !i.access_token.startsWith('access-sandbox-'));
+
+  // live=true (manual Refresh) → accountsBalanceGet forces a real-time pull from the institution
+  // default → accountsGet returns Plaid-cached balances (fast)
   const accountResults = await Promise.all(
-    items.map(item =>
-      plaidClient.accountsGet({ access_token: item.access_token })
+    activeItems.map(item =>
+      (live ? plaidClient.accountsBalanceGet({ access_token: item.access_token })
+             : plaidClient.accountsGet({ access_token: item.access_token }))
         .then(r => r.data.accounts.map(a => ({
           account_id:       a.account_id,
           item_id:          item.item_id,

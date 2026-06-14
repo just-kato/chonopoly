@@ -14,6 +14,10 @@ export async function POST() {
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
     language: "en",
+    // Register webhook for new connections — guarded so local dev without APP_URL still works
+    ...(process.env.NEXT_PUBLIC_APP_URL && {
+      webhook: `${process.env.NEXT_PUBLIC_APP_URL}/api/plaid/webhook`,
+    }),
   });
 
   return NextResponse.json({ link_token: response.data.link_token });

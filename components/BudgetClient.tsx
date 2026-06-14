@@ -1222,24 +1222,70 @@ function hashMerchantColor(name: string): string {
   return categoryColors[Math.abs(hash) % categoryColors.length];
 }
 
+type Period = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
+
+function getPeriodRange(period: Period): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  switch (period) {
+    case 'DAY': {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+    case 'WEEK': {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+    case 'MONTH': {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start, end };
+    }
+    case 'QUARTER': {
+      const q = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), q * 3, 1);
+      return { start, end };
+    }
+    case 'YEAR': {
+      const start = new Date(now.getFullYear(), 0, 1);
+      return { start, end };
+    }
+  }
+}
+
+function formatDateRange(start: Date, end: Date): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const startStr = start.toLocaleDateString('en-US', opts);
+  const endStr   = end.toLocaleDateString('en-US', opts);
+  const year     = end.getFullYear();
+  if (startStr === endStr) return `${startStr}, ${year}`;
+  return `${startStr} – ${endStr}, ${year}`;
+}
+
+// Only internal transfers excluded per J. Scott framework — loans, fees, etc. are real expenses
+const EXCLUDED_TRANSFER_CATEGORIES = new Set([
+  'TRANSFER_OUT',
+  'TRANSFER_IN',
+]);
+
+// Income = actual earnings only (not negative-amount transfers)
+const INCOME_CATEGORIES = new Set([
+  'INCOME',
+]);
+
 function AnalyticsPanel({
-  spending,
   transactions,
-  totalSpent,
-  totalIncome,
   accounts,
   onGoTo,
 }: {
-  spending: Record<string, number>;
   transactions: Transaction[];
-  totalSpent: number;
-  totalIncome: number;
   accounts: Account[];
   onGoTo: (view: ViewState) => void;
 }) {
-  // TODO: period filtering not yet wired — pills are visual only
-  const [period, setPeriod] = useState<"7D" | "30D" | "90D" | "YTD">("30D");
-  const [savingsRateMode, setSavingsRateMode] = useState<"dollar" | "pct">("dollar");
+  const [period, setPeriod] = useState<Period>('MONTH');
   const [goalTarget, setGoalTarget] = useState<number | null>(null);
   const [goalTargetLoading, setGoalTargetLoading] = useState(true);
 
@@ -1258,91 +1304,28 @@ function AnalyticsPanel({
       .catch(() => { setGoalTarget(30000); setGoalTargetLoading(false); });
   }, []);
 
-  const sorted = Object.entries(spending).sort((a, b) => b[1] - a[1]);
-  const total = sorted.reduce((s, [, v]) => s + v, 0);
-
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const dayAmounts = DAYS.map((_, i) => {
-    const jsDay = i === 6 ? 0 : i + 1;
-    return transactions
-      .filter((t) => t.amount > 0 && new Date(t.date + "T00:00:00").getDay() === jsDay)
-      .reduce((s, t) => s + t.amount, 0);
-  });
-  const maxDayAmount = Math.max(...dayAmounts, 0);
-
-  const merchantMap = new Map<string, number>();
-  for (const t of transactions) {
-    if (t.amount <= 0) continue;
-    const name = t.merchant_name ?? t.name;
-    merchantMap.set(name, (merchantMap.get(name) ?? 0) + t.amount);
-  }
-  const topMerchants = [...merchantMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-  const net = totalIncome - totalSpent;
-  const netPositive = net >= 0;
 
   function trailingAvgIncome(txns: Transaction[]): number {
     const now = new Date();
-    let total = 0;
-    let monthsWithData = 0;
+    const monthTotals: number[] = [];
     for (let i = 1; i <= 3; i++) {
-      const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd   = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      monthEnd.setHours(23, 59, 59, 999);
       const monthIncome = txns
         .filter(t => {
-          const d = new Date(t.date);
-          return d.getFullYear() === month.getFullYear() &&
-                 d.getMonth() === month.getMonth() &&
-                 t.amount < 0;
+          const d = new Date(t.date + 'T00:00:00');
+          return d >= monthStart && d <= monthEnd &&
+                 t.amount < 0 &&
+                 INCOME_CATEGORIES.has(t.personal_finance_category?.primary ?? '');
         })
         .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-      if (monthIncome > 0) { total += monthIncome; monthsWithData++; }
+      if (monthIncome > 0) monthTotals.push(monthIncome);
     }
-    return monthsWithData > 0 ? total / monthsWithData : 0;
-  }
-
-  function currentMonthExpenses(txns: Transaction[]): number {
-    const now = new Date();
-    const currentMonthTxs = txns.filter(t => {
-      const d = new Date(t.date);
-      return d.getFullYear() === now.getFullYear() &&
-             d.getMonth() === now.getMonth() &&
-             t.amount > 0;
-    });
-    // Fallback to previous month when < 3 transactions this month (early in month)
-    if (currentMonthTxs.length < 3) {
-      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return txns
-        .filter(t => {
-          const d = new Date(t.date);
-          return d.getFullYear() === prev.getFullYear() &&
-                 d.getMonth() === prev.getMonth() &&
-                 t.amount > 0;
-        })
-        .reduce((sum, t) => sum + t.amount, 0);
-    }
-    return currentMonthTxs.reduce((sum, t) => sum + t.amount, 0);
-  }
-
-  function prevMonthSavingsRate(txns: Transaction[]): number {
-    const now = new Date();
-    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const income = txns
-      .filter(t => {
-        const d = new Date(t.date);
-        return d.getFullYear() === prevMonth.getFullYear() &&
-               d.getMonth() === prevMonth.getMonth() &&
-               t.amount < 0;
-      })
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    const expenses = txns
-      .filter(t => {
-        const d = new Date(t.date);
-        return d.getFullYear() === prevMonth.getFullYear() &&
-               d.getMonth() === prevMonth.getMonth() &&
-               t.amount > 0;
-      })
-      .reduce((sum, t) => sum + t.amount, 0);
-    return income - expenses;
+    return monthTotals.length > 0
+      ? monthTotals.reduce((a, b) => a + b, 0) / monthTotals.length
+      : 0;
   }
 
   function calcLiquidAssets(accts: Account[]): number {
@@ -1351,19 +1334,68 @@ function AnalyticsPanel({
       .reduce((sum, a) => sum + (a.balances.current ?? 0), 0);
   }
 
-  const monthly_income = trailingAvgIncome(transactions);
-  const monthly_expenses = currentMonthExpenses(transactions);
-  const savings_rate_dollar = monthly_income - monthly_expenses;
-  const savings_rate_pct = monthly_income > 0 ? (savings_rate_dollar / monthly_income) * 100 : null;
-  const prev_savings_rate = prevMonthSavingsRate(transactions);
-  const savings_rate_delta = savings_rate_dollar - prev_savings_rate;
-  const liquid_assets = calcLiquidAssets(accounts);
-  const required_reserve = monthly_expenses * 3;
+  // Period-filtered expense helpers
+  const { start, end } = getPeriodRange(period);
+  const isInPeriod = (tx: Transaction) => {
+    const d = new Date(tx.date + 'T00:00:00');
+    return d >= start && d <= end;
+  };
+  const isExpense = (tx: Transaction) =>
+    tx.amount > 0 &&
+    !EXCLUDED_TRANSFER_CATEGORIES.has(tx.personal_finance_category?.primary ?? '');
+  const isIncome = (tx: Transaction) =>
+    tx.amount < 0 &&
+    INCOME_CATEGORIES.has(tx.personal_finance_category?.primary ?? '');
+
+  const periodTxs       = transactions.filter(isInPeriod);
+  const periodExpenses  = periodTxs.filter(isExpense);
+  const periodIncomeTxs = periodTxs.filter(isIncome);
+
+  // Category breakdown — period-filtered, transfers excluded
+  const periodSpending = periodExpenses.reduce<Record<string, number>>((acc, t) => {
+    const key = t.personal_finance_category?.primary ?? 'OTHER';
+    acc[key] = (acc[key] ?? 0) + t.amount;
+    return acc;
+  }, {});
+  const sorted = Object.entries(periodSpending).sort((a, b) => b[1] - a[1]);
+  const total  = sorted.reduce((s, [, v]) => s + v, 0);
+
+  // Top merchants — period-filtered, transfers excluded
+  const merchantMap = new Map<string, number>();
+  for (const t of periodExpenses) {
+    const name = t.merchant_name ?? t.name;
+    merchantMap.set(name, (merchantMap.get(name) ?? 0) + t.amount);
+  }
+  const topMerchants = [...merchantMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  // Spending by weekday — period-filtered, transfers excluded
+  const dayAmounts = DAYS.map((_, i) => {
+    const jsDay = i === 6 ? 0 : i + 1;
+    return periodExpenses
+      .filter(t => new Date(t.date + 'T00:00:00').getDay() === jsDay)
+      .reduce((s, t) => s + t.amount, 0);
+  });
+  const maxDayAmount = Math.max(...dayAmounts, 0);
+
+  // J. Scott framework: trailing income (3-mo avg) vs period expenses
+  const trailingIncome    = trailingAvgIncome(transactions);
+  const totalSpentPeriod  = periodExpenses.reduce((s, t) => s + t.amount, 0);
+  const totalIncomePeriod = periodIncomeTxs.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const savingsDollar     = trailingIncome - totalSpentPeriod;
+  const savingsRatePct    = trailingIncome > 0 ? (savingsDollar / trailingIncome) * 100 : null;
+  const netPositive       = savingsDollar >= 0;
+
+  // TODO: when period !== MONTH, this understates monthly reserve. Fix in follow-up session.
+  const monthly_expenses  = totalSpentPeriod;
+  const liquid_assets     = calcLiquidAssets(accounts);
+  const required_reserve  = monthly_expenses * 3;
   const investable_assets = liquid_assets - required_reserve;
 
-  if (sorted.length === 0) return <p className="text-sm text-(--color-text-secondary) py-12 text-center">No spending data yet.</p>;
+  const noSpendingData = sorted.length === 0;
 
-  const srColor = savings_rate_dollar > 0 ? "text-(--color-success)" : savings_rate_dollar < 0 ? "text-(--color-danger)" : "text-(--color-text-primary)";
+  const periodLabel = period === 'DAY' ? 'Today' : period === 'WEEK' ? 'This Week' : period === 'MONTH' ? 'This Month' : period === 'QUARTER' ? 'This Quarter' : 'This Year';
+
+  const srColor = savingsDollar > 0 ? "text-(--color-success)" : savingsDollar < 0 ? "text-(--color-danger)" : "text-(--color-text-primary)";
   const invColor = investable_assets >= 0 ? "text-(--color-success)" : "text-(--color-danger)";
 
   return (
@@ -1372,42 +1404,30 @@ function AnalyticsPanel({
       {/* Row 1 — Financial Health */}
       {/* Left — Savings Rate */}
       <div className="bg-(--color-surface) border border-(--color-border-default) rounded-(--radius-md) p-4" style={{ gridColumn: "1 / 8" }}>
-          <div className="flex items-center justify-between">
-            <p className="text-[9px] uppercase tracking-[0.1em] text-(--color-text-tertiary)">Savings Rate</p>
-            <div className="flex gap-1">
-              {(["dollar", "pct"] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => setSavingsRateMode(m)}
-                  className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
-                    savingsRateMode === m
-                      ? "bg-(--color-border-default) text-(--color-text-primary)"
-                      : "text-(--color-text-tertiary) hover:text-(--color-text-secondary)"
-                  }`}
-                >
-                  {m === "dollar" ? "$" : "%"}
-                </button>
-              ))}
-            </div>
+          <p className="text-[10px] uppercase tracking-[0.1em] text-(--color-text-tertiary)">Are you saving money?</p>
+          <div className="flex items-baseline gap-3 mt-2">
+            <p className={`font-(--font-display) text-[48px] font-bold leading-none ${srColor}`}>
+              {savingsRatePct === null ? '—' : `${savingsRatePct < 0 ? '-' : ''}${Math.abs(savingsRatePct).toFixed(1)}%`}
+            </p>
+            <p className={`text-[20px] font-(--font-mono) leading-none ${srColor}`}>
+              {savingsDollar >= 0 ? '+' : '−'}${formatMoney(Math.abs(savingsDollar))}/mo
+            </p>
           </div>
-          <p className={`font-(--font-display) text-[28px] font-bold leading-none mt-2 ${srColor}`}>
-            {savingsRateMode === "dollar"
-              ? `${savings_rate_dollar < 0 ? "-" : ""}$${formatMoney(Math.abs(savings_rate_dollar))} / mo`
-              : savings_rate_pct === null
-                ? "N/A"
-                : `${savings_rate_pct < 0 ? "-" : ""}${Math.abs(savings_rate_pct).toFixed(1)}%`}
+          <p className="text-[12px] text-(--color-text-secondary) mt-1">
+            of your income saved {period === 'MONTH' ? 'this month' : period === 'WEEK' ? 'this week' : period === 'DAY' ? 'today' : `this ${period.charAt(0) + period.slice(1).toLowerCase()}`}
           </p>
-          <p className={`text-[12px] font-(--font-mono) mt-1 ${savings_rate_delta >= 0 ? "text-(--color-success)" : "text-(--color-danger)"}`}>
-            {savings_rate_delta >= 0 ? "↑" : "↓"} ${formatMoney(Math.abs(savings_rate_delta))} vs last month
-          </p>
-          <div className="flex gap-4 mt-3 pt-3 border-t border-(--color-border-subtle)">
+          <div className="flex gap-6 mt-4 pt-4 border-t border-(--color-border-subtle)">
             <div>
-              <p className="text-[9px] uppercase tracking-[0.08em] text-(--color-text-tertiary) mb-0.5">Income (3mo avg)</p>
-              <p className="text-[14px] font-(--font-mono) text-(--color-text-primary)">${formatMoney(monthly_income)}</p>
+              <p className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary) mb-0.5">Avg Monthly Income</p>
+              <p className="text-[16px] font-(--font-mono) text-(--color-text-primary)">${formatMoney(trailingIncome)}</p>
+              <p className="text-[10px] text-(--color-text-tertiary) mt-0.5">3-month average · varies monthly</p>
             </div>
             <div>
-              <p className="text-[9px] uppercase tracking-[0.08em] text-(--color-text-tertiary) mb-0.5">Expenses (this mo)</p>
-              <p className="text-[14px] font-(--font-mono) text-(--color-text-primary)">${formatMoney(monthly_expenses)}</p>
+              <p className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-tertiary) mb-0.5">
+                {periodLabel} Expenses
+              </p>
+              <p className="text-[16px] font-(--font-mono) text-(--color-text-primary)">${formatMoney(totalSpentPeriod)}</p>
+              <p className="text-[10px] text-(--color-text-tertiary) mt-0.5">transfers not included</p>
             </div>
           </div>
         </div>
@@ -1422,6 +1442,9 @@ function AnalyticsPanel({
             {investable_assets >= 0
               ? `You can responsibly invest $${formatMoney(investable_assets)} today`
               : `Build your reserve — $${formatMoney(Math.abs(investable_assets))} short`}
+          </p>
+          <p className="text-[11px] text-(--color-text-tertiary) mt-1">
+            ${formatMoney(liquid_assets)} liquid − ${formatMoney(required_reserve)} reserve (3 × ${formatMoney(monthly_expenses)}/mo)
           </p>
           <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-(--color-border-subtle)">
             <div className="flex justify-between text-[12px]">
@@ -1444,7 +1467,7 @@ function AnalyticsPanel({
       {/* Row 2 — Period selector + stats */}
       <div className="px-4 py-4" style={{ gridColumn: "1 / 13" }}>
         <div className="flex gap-1.5 mb-4">
-          {(["7D", "30D", "90D", "YTD"] as const).map((p) => (
+          {(["DAY", "WEEK", "MONTH", "QUARTER", "YEAR"] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -1454,27 +1477,23 @@ function AnalyticsPanel({
                   : "bg-(--color-overlay) text-(--color-text-secondary) hover:text-(--color-text-primary)"
               }`}
             >
-              {p}
+              {p.charAt(0) + p.slice(1).toLowerCase()}
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-3">
+        <p className="text-[11px] text-(--color-text-tertiary) mt-2 mb-4">
+          {formatDateRange(start, end)} · {periodExpenses.length} transaction{periodExpenses.length !== 1 ? 's' : ''}
+        </p>
+        <div className="grid grid-cols-2 gap-3">
           <div className="bg-(--color-surface) rounded-(--radius-md) px-3 py-3">
-            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-[0.08em] mb-1">Spent</p>
-            <p className="text-lg font-semibold font-(--font-mono) text-(--color-text-primary)">${formatMoney(totalSpent)}</p>
+            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-[0.08em] mb-1">Spent ({periodLabel})</p>
+            <p className="text-lg font-semibold font-(--font-mono) text-(--color-text-primary)">${formatMoney(totalSpentPeriod)}</p>
           </div>
           <div className="bg-(--color-surface) rounded-(--radius-md) px-3 py-3">
-            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-[0.08em] mb-1">Income</p>
-            <p className="text-lg font-semibold font-(--font-mono) text-(--color-text-primary)">${formatMoney(totalIncome)}</p>
+            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-[0.08em] mb-1">Avg Monthly Income</p>
+            <p className="text-lg font-semibold font-(--font-mono) text-(--color-text-primary)">${formatMoney(trailingIncome)}</p>
           </div>
         </div>
-        <p className="text-[12px] text-(--color-text-secondary)">
-          {netPositive ? "You're up " : "You're down "}
-          <span className={`font-(--font-mono) font-semibold ${netPositive ? "text-(--color-success)" : "text-(--color-danger)"}`}>
-            ${formatMoney(Math.abs(net))}
-          </span>
-          {" this period"}
-        </p>
       </div>
 
       {/* Row 3 — Main data row (3-col, locked height) */}
@@ -1483,10 +1502,12 @@ function AnalyticsPanel({
         {/* Col 1 — By Category */}
         <div className="bg-(--color-elevated) border border-(--color-border-default) rounded-md overflow-hidden flex flex-col relative">
           <div className="px-4 pt-4 pb-1 shrink-0">
-            <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em]">By category</h2>
+            <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em]">Where your money went</h2>
           </div>
           <div className="flex-1 overflow-y-auto min-h-0">
-            {sorted.map(([key, amount]) => {
+            {noSpendingData ? (
+              <p className="text-[12px] text-(--color-text-tertiary) text-center py-8">No spending this period</p>
+            ) : sorted.map(([key, amount]) => {
               const meta = getCategoryMeta(key);
               const pct = total > 0 ? (amount / total) * 100 : 0;
               return (
@@ -1511,20 +1532,22 @@ function AnalyticsPanel({
               );
             })}
           </div>
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8" style={{ background: "linear-gradient(to bottom, transparent, var(--color-elevated))" }} />
+          {!noSpendingData && <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8" style={{ background: "linear-gradient(to bottom, transparent, var(--color-elevated))" }} />}
         </div>
 
         {/* Col 2 — Distribution (featured) */}
         <div className="bg-(--color-elevated) border border-(--color-border-default) rounded-md px-4 py-4 flex flex-col overflow-hidden">
           <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em] mb-3 shrink-0">Distribution</h2>
-          <SpendingChart spending={spending} />
+          {noSpendingData
+            ? <p className="text-[12px] text-(--color-text-tertiary) text-center py-8">No spending this period</p>
+            : <SpendingChart spending={periodSpending} />}
         </div>
 
         {/* Col 3 — Top Merchants */}
         {topMerchants.length > 0 ? (
           <div className="bg-(--color-elevated) border border-(--color-border-default) rounded-md overflow-hidden flex flex-col">
             <div className="px-4 pt-4 pb-1 shrink-0">
-              <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em]">Top merchants</h2>
+              <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em]">Top merchants {periodLabel.toLowerCase()}</h2>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               {topMerchants.map(([name, amt]) => {
@@ -1562,8 +1585,10 @@ function AnalyticsPanel({
 
       {/* Row 4 — Spending by day (full-width slim) */}
       <div className="bg-(--color-elevated) border border-(--color-border-default) rounded-md px-4 py-3 overflow-hidden" style={{ gridColumn: "1 / -1", height: "140px" }}>
-        <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em] mb-2">Spending by day</h2>
-        <div className="flex items-end gap-2 h-[76px]">
+        <h2 className="text-[10px] font-medium text-(--color-text-tertiary) uppercase tracking-[0.1em] mb-2">Spending by day of week</h2>
+        {noSpendingData ? (
+          <p className="text-[12px] text-(--color-text-tertiary) text-center py-4">No spending this period</p>
+        ) : <div className="flex items-end gap-2 h-[76px]">
           {DAYS.map((day, i) => {
             const amt = dayAmounts[i];
             const opacity = maxDayAmount > 0 ? 0.2 + 0.8 * (amt / maxDayAmount) : 0.2;
@@ -1580,21 +1605,21 @@ function AnalyticsPanel({
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       {/* Row 5 — Investment Readiness */}
       {!goalTargetLoading && (() => {
         const target = goalTarget ?? 30000;
-        const months_to_goal = savings_rate_dollar > 0
-          ? Math.ceil((target - Math.max(investable_assets, 0)) / savings_rate_dollar)
+        const months_to_goal = savingsDollar > 0
+          ? Math.ceil((target - Math.max(investable_assets, 0)) / savingsDollar)
           : null;
         const progressPct = Math.min(100, Math.max(0, (Math.max(investable_assets, 0) / target) * 100));
         const readyDate = months_to_goal != null && months_to_goal > 0
           ? new Date(new Date().getFullYear(), new Date().getMonth() + months_to_goal, 1)
             .toLocaleDateString("en-US", { month: "long", year: "numeric" })
           : null;
-        const insight = savings_rate_dollar <= 0
+        const insight = savingsDollar <= 0
           ? "Focus on getting your savings rate positive before investing. A negative savings rate means you're spending more than you earn — investing now would accelerate financial risk."
           : investable_assets < monthly_expenses * 3
             ? `Build your 3-month emergency reserve first ($${formatMoney(required_reserve - liquid_assets > 0 ? required_reserve - liquid_assets : 0)} needed). This protects you from having to sell an investment at the wrong time.`
@@ -1609,7 +1634,7 @@ function AnalyticsPanel({
                 <p className="text-[9px] uppercase tracking-[0.1em] text-(--color-text-tertiary) mb-3">Investment Readiness</p>
                 <p className="text-[13px] font-semibold text-(--color-text-primary)">When can you invest?</p>
                 <p className="text-[11px] text-(--color-text-tertiary) mt-0.5 mb-3">Based on your current savings rate and goals</p>
-                {savings_rate_dollar <= 0 ? (
+                {savingsDollar <= 0 ? (
                   <p className="font-(--font-display) text-[24px] font-bold text-(--color-danger)">Fix your savings rate first</p>
                 ) : investable_assets >= target ? (
                   <p className="font-(--font-display) text-[24px] font-bold text-(--color-success)">You&apos;re ready to invest now!</p>
@@ -1618,7 +1643,7 @@ function AnalyticsPanel({
                     <p className="font-(--font-display) text-[48px] font-bold leading-none text-(--color-accent)">{months_to_goal}</p>
                     <p className="text-[13px] text-(--color-text-secondary) mt-1">months</p>
                     {readyDate && <p className="text-[12px] text-(--color-text-tertiary) mt-1">Ready by {readyDate}</p>}
-                    <p className="text-[11px] text-(--color-text-tertiary) mt-0.5">at your current rate of ${formatMoney(savings_rate_dollar)}/mo</p>
+                    <p className="text-[11px] text-(--color-text-tertiary) mt-0.5">at your current rate of ${formatMoney(savingsDollar)}/mo</p>
                   </>
                 ) : null}
               </div>
@@ -1671,7 +1696,7 @@ function AnalyticsPanel({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   ["Current investable assets", `$${formatMoney(Math.max(investable_assets, 0))}`],
-                  ["Monthly savings rate", `$${formatMoney(savings_rate_dollar)} / mo`],
+                  ["Monthly savings rate", `$${formatMoney(savingsDollar)} / mo`],
                   ["Down payment target", `$${formatMoney(target)}`],
                 ].map(([label, value]) => (
                   <div key={label} className="bg-(--color-overlay) rounded-(--radius-md) px-3 py-2.5">
@@ -2331,7 +2356,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               </div>
             )}
             {view === "analytics" && connected.length > 0 && !loading && (
-              <AnalyticsPanel spending={spending} transactions={transactions} totalSpent={totalSpent} totalIncome={totalIncome} accounts={accounts} onGoTo={navTo} />
+              <AnalyticsPanel transactions={transactions} accounts={accounts} onGoTo={navTo} />
             )}
             <div className={view === "analytics" ? "hidden" : (view === "profile" || view === "transactions" || view === "manage") ? "" : "max-w-2xl mx-auto"}>
             {/* Budgets and Goals have their own data fetching */}

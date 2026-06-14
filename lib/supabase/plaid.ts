@@ -25,7 +25,7 @@ export async function savePlaidItem(
 export async function getPlaidItems(userId: string) {
   const { data, error } = await serviceClient()
     .from("plaid_items")
-    .select("id, access_token, item_id, institution_name, last_synced_at")
+    .select("id, access_token, item_id, institution_name, last_synced_at, transactions_cursor")
     .eq("user_id", userId);
   return { data: data ?? [], error };
 }

@@ -17,7 +17,23 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
-import "dotenv/config";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+// Load .env.local (dotenv is not a direct dep; parse manually)
+try {
+  const env = readFileSync(resolve(process.cwd(), ".env.local"), "utf8");
+  for (const line of env.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (!(key in process.env)) process.env[key] = val;
+  }
+} catch { /* .env.local not present — rely on shell env */ }
+
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
 import { createClient } from "@supabase/supabase-js";
 

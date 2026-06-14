@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import CategoryPill from "./CategoryPill";
 import { CATEGORY_META, formatMoney, Transaction } from "./types";
-import type { GoalSummary } from "@/lib/goals/types";
 
 interface DailyDigestProps {
   transactions: Transaction[];
@@ -19,7 +18,6 @@ function toDateStr(d: Date): string {
 
 export default function DailyDigest({ transactions, categoryOverrides, onViewAll, onRecategorize }: DailyDigestProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [goals, setGoals] = useState<GoalSummary[]>([]);
 
   // Hydration-safe: default to yesterday before 10am, today otherwise
   useEffect(() => {
@@ -28,13 +26,6 @@ export default function DailyDigest({ transactions, categoryOverrides, onViewAll
     if (now.getHours() < 10) d.setDate(d.getDate() - 1);
     d.setHours(0, 0, 0, 0);
     setSelectedDate(d);
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/goals/summary")
-      .then(r => r.ok ? r.json() : { goals: [] })
-      .then(d => setGoals((d.goals ?? []).filter((g: GoalSummary) => g.status === "active")))
-      .catch(() => {});
   }, []);
 
   const today = new Date();
@@ -80,7 +71,7 @@ export default function DailyDigest({ transactions, categoryOverrides, onViewAll
       return d;
     });
   }
-
+  console.log(transactions, "transactions")
   // Data computation — pure, render-time
   const dateStr = selectedDate ? toDateStr(selectedDate) : null;
   const dayTxs = dateStr ? transactions.filter(tx => tx.date === dateStr) : [];
@@ -105,7 +96,6 @@ export default function DailyDigest({ transactions, categoryOverrides, onViewAll
   const isZeroSpend = hasData && dayTxs.length === 0;
   const noData = selectedDate !== null && !hasData;
 
-  const goalName = goals[0]?.name;
 
   return (
     <>
@@ -151,9 +141,7 @@ export default function DailyDigest({ transactions, categoryOverrides, onViewAll
               No spending on {dateLabel(selectedDate!)}
             </p>
             <p className="text-[11px] text-(--color-text-secondary) mt-1">
-              {goalName
-                ? `Every dollar saved gets you closer to ${goalName}`
-                : "A good day for your wallet"}
+              {"A good day for your wallet"}
             </p>
           </div>
         )}

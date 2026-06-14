@@ -2285,7 +2285,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               {/* Section 3: Tab content */}
               <div className="flex-1 overflow-y-auto pb-20">
                 {mobileOverviewTab === 'activity' && (
-                  <div className="p-4">
+                  <div className="p-4 w-full" style={{ height: 400, minHeight: 400 }}>
                     <ActivityChart transactions={transactions} />
                   </div>
                 )}

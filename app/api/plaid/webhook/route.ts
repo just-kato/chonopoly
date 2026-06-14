@@ -58,11 +58,6 @@ async function verifyPlaidWebhook(req: Request, rawBody: string): Promise<boolea
 }
 
 export async function POST(req: Request) {
-  if (!process.env.PLAID_WEBHOOK_SECRET) {
-    console.error("[webhook] PLAID_WEBHOOK_SECRET is not set");
-    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
-  }
-
   const rawBody = await req.text();
 
   const verified = await verifyPlaidWebhook(req, rawBody);

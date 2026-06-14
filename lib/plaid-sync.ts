@@ -19,64 +19,104 @@ export async function syncPlaidItem(
   userId: string,
   itemId: string,
   accessToken: string
-): Promise<{ synced: number; updated: number }> {
+): Promise<{ added: number; modified: number; removed: number }> {
   const db = serviceDb();
-  const startDate = daysAgo(45);
-  const endDate   = daysAgo(0);
 
-  let synced = 0;
-  let updated = 0;
+  // Read cursor for incremental sync; null = first sync (Plaid returns full history)
+  const { data: itemRow } = await db
+    .from("plaid_items")
+    .select("transactions_cursor")
+    .eq("item_id", itemId)
+    .eq("user_id", userId)
+    .single();
 
-  try {
-    const res = await plaidClient.transactionsGet({
+  let cursor: string | null = itemRow?.transactions_cursor ?? null;
+  let hasMore = true;
+  let totalAdded = 0;
+  let totalModified = 0;
+  let totalRemoved = 0;
+
+  while (hasMore) {
+    const res = await plaidClient.transactionsSync({
       access_token: accessToken,
-      start_date: startDate,
-      end_date: endDate,
+      ...(cursor ? { cursor } : {}),
+      count: 500,
       options: {
-        count: 500,
         include_personal_finance_category: true,
-        include_personal_finance_category_beta: true,
       },
     });
 
-    const rows = res.data.transactions.map((tx) => ({
-      user_id:              userId,
-      plaid_transaction_id: tx.transaction_id,
-      plaid_account_id:     tx.account_id,
-      plaid_item_id:        itemId,
-      merchant_name:        tx.merchant_name ?? tx.name ?? null,
-      amount:               tx.amount,
-      date:                 tx.date,
-      category_primary:     tx.personal_finance_category?.primary ?? null,
-      category_detailed:    tx.personal_finance_category?.detailed ?? null,
-      pending:              tx.pending ?? false,
-      currency_code:        tx.iso_currency_code ?? null,
-      synced_at:            new Date().toISOString(),
-    }));
+    const { added, modified, removed, next_cursor, has_more } = res.data;
 
-    if (rows.length) {
-      const { error, data } = await db
+    if (added.length > 0) {
+      const rows = added.map(tx => ({
+        user_id:                userId,
+        plaid_transaction_id:   tx.transaction_id,
+        plaid_account_id:       tx.account_id,
+        plaid_item_id:          itemId,
+        merchant_name:          tx.merchant_name ?? tx.name ?? null,
+        name:                   tx.name ?? null,
+        amount:                 tx.amount,
+        date:                   tx.date,
+        pending:                tx.pending ?? false,
+        pending_transaction_id: tx.pending_transaction_id ?? null,
+        category_primary:       tx.personal_finance_category?.primary ?? null,
+        category_detailed:      tx.personal_finance_category?.detailed ?? null,
+        currency_code:          tx.iso_currency_code ?? null,
+        synced_at:              new Date().toISOString(),
+      }));
+      const { error } = await db
         .from("plaid_transactions")
-        .upsert(rows, { onConflict: "user_id,plaid_transaction_id" })
-        .select("id");
-
-      if (error) {
-        console.error("[sync] upsert error for item", itemId, error.message);
-      } else {
-        synced += rows.filter(r => !r.pending).length;
-        updated += data?.length ?? 0;
-      }
+        .upsert(rows, { onConflict: "user_id,plaid_transaction_id" });
+      if (error) console.error("[sync] upsert error (added) for item", itemId, error.message);
+      else totalAdded += added.length;
     }
 
-    // Use serviceDb for last_synced_at — works from both user and webhook contexts
-    await db
-      .from("plaid_items")
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq("item_id", itemId)
-      .eq("user_id", userId);
-  } catch (err) {
-    console.error("[sync] Plaid error for item", itemId, err);
+    if (modified.length > 0) {
+      const rows = modified.map(tx => ({
+        user_id:                userId,
+        plaid_transaction_id:   tx.transaction_id,
+        plaid_account_id:       tx.account_id,
+        plaid_item_id:          itemId,
+        merchant_name:          tx.merchant_name ?? tx.name ?? null,
+        name:                   tx.name ?? null,
+        amount:                 tx.amount,
+        date:                   tx.date,
+        pending:                tx.pending ?? false,
+        pending_transaction_id: tx.pending_transaction_id ?? null,
+        category_primary:       tx.personal_finance_category?.primary ?? null,
+        category_detailed:      tx.personal_finance_category?.detailed ?? null,
+        currency_code:          tx.iso_currency_code ?? null,
+        synced_at:              new Date().toISOString(),
+      }));
+      const { error } = await db
+        .from("plaid_transactions")
+        .upsert(rows, { onConflict: "user_id,plaid_transaction_id" });
+      if (error) console.error("[sync] upsert error (modified) for item", itemId, error.message);
+      else totalModified += modified.length;
+    }
+
+    if (removed.length > 0) {
+      const removedIds = removed.map(tx => tx.transaction_id);
+      const { error } = await db
+        .from("plaid_transactions")
+        .delete()
+        .eq("user_id", userId)
+        .eq("plaid_item_id", itemId)
+        .in("plaid_transaction_id", removedIds);
+      if (error) console.error("[sync] delete error (removed) for item", itemId, error.message);
+      else totalRemoved += removed.length;
+    }
+
+    cursor = next_cursor;
+    hasMore = has_more;
   }
+
+  await db
+    .from("plaid_items")
+    .update({ transactions_cursor: cursor, last_synced_at: new Date().toISOString() })
+    .eq("item_id", itemId)
+    .eq("user_id", userId);
 
   invalidateBudgetCache({ type: "personal", id: userId });
 
@@ -133,5 +173,5 @@ export async function syncPlaidItem(
     });
   }
 
-  return { synced, updated };
+  return { added: totalAdded, modified: totalModified, removed: totalRemoved };
 }

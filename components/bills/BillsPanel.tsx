@@ -513,8 +513,8 @@ function PanelCalendarView({ bills, onBillClick }: {
                           onClick={e => { e.stopPropagation(); onBillClick(b); }}
                           className={`min-h-[18px] rounded-(--radius-pill) px-1.5 text-[10px] font-medium flex items-center justify-between gap-1 overflow-hidden cursor-pointer touch-manipulation ${pillClasses(paid, isToday(day), isPast(day) && !paid)}`}
                         >
-                          <span className="truncate min-w-0">{paid ? "✓ " : ""}{b.name}</span>
-                          <span className="shrink-0">{abbrevAmt(b.amount)}</span>
+                          h
+                          <span>${formatMoney(b.amount)}</span>
                         </div>
                       );
                     })}

@@ -95,7 +95,7 @@ export default function Sidebar({ chapters, activeId, onSelect, progress, comple
           <div>
             <div className="flex items-center gap-2 mb-1">
               <BookOpen size={16} className="text-amber-400" />
-              <span className="font-mono text-xs text-amber-400 tracking-widest">GA EXAM PREP</span>
+              <span className="font-mono text-xs text-amber-400 tracking-widest">RE LICENSING</span>
             </div>
             <p className="text-white font-serif text-sm font-bold leading-tight">Real Estate Study Guide</p>
           </div>

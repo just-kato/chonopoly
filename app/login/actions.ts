@@ -16,7 +16,7 @@ export async function login(
 
   if (error) return error.message;
 
-  redirect("/");
+  redirect("/finances");
 }
 
 export async function logout() {

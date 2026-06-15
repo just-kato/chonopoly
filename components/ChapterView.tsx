@@ -41,7 +41,7 @@ export default function ChapterView({
           </button>
 
           <span className="hidden md:inline-flex bg-amber-400 text-black font-mono text-[11px] font-medium px-2.5 py-1 rounded shrink-0 tracking-widest items-center">
-            GA EXAM PREP
+            RE LICENSING
           </span>
 
           <div className="flex-1 min-w-0 pr-10 md:pr-0">

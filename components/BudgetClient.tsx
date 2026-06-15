@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePlaidLink } from "react-plaid-link";
 import Link from "next/link";
 import {
@@ -1772,6 +1773,8 @@ function AccountPanel({ accountId, transactions, accountMap, categoryOverrides, 
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
 export default function BudgetClient({ initialConnected, userId }: { initialConnected: ConnectedItem[]; userId: string }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [connected, setConnected] = useState(initialConnected);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -1779,7 +1782,14 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const [loading, setLoading] = useState(initialConnected.length > 0);
   const [error, setError] = useState<string | null>(null);
   const [fetchTick, setFetchTick] = useState(0);
-  const [view, setView] = useState<ViewState>("overview");
+  const [view, setView] = useState<ViewState>(() => {
+    const tab = searchParams.get("tab");
+    const accountId = searchParams.get("accountId");
+    if (tab === "account" && accountId) return { type: "account", accountId };
+    const VALID_TABS = ["overview","manage","budgets","goals","debts","bills","transactions","analytics","profile"] as const;
+    if (tab && (VALID_TABS as readonly string[]).includes(tab)) return tab as ViewState;
+    return "overview";
+  });
   const [mobileOverviewTab, setMobileOverviewTab] = useState<'activity' | 'recent' | 'bills' | 'budgets'>('activity');
   // Prevents desktop OverviewPanel (and its OnboardingChecklist) from mounting on mobile
   const [isDesktop, setIsDesktop] = useState(false);
@@ -1965,7 +1975,15 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
     setCategoryOverrides((prev) => ({ ...prev, [txId]: cat }));
   }
 
-  function navTo(v: ViewState) { setView(v); setSearch(""); }
+  function navTo(v: ViewState) {
+    setView(v);
+    setSearch("");
+    if (typeof v === "string") {
+      router.replace(`/finances?tab=${v}`, { scroll: false });
+    } else {
+      router.replace(`/finances?tab=account&accountId=${v.accountId}`, { scroll: false });
+    }
+  }
 
   const isAccountView = typeof view === "object" && view.type === "account";
   const activeAccountId = isAccountView ? (view as { type: "account"; accountId: string }).accountId : null;

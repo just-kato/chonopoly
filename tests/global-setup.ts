@@ -20,7 +20,7 @@ export default async function globalSetup() {
   await page.fill('input[name="email"]', process.env.TEST_EMAIL);
   await page.fill('input[name="password"]', process.env.TEST_PASSWORD);
   await page.click('button[type="submit"]');
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL("http://localhost:3000/finances");
   await context.storageState({ path: AUTH_FILE });
   await browser.close();
 }

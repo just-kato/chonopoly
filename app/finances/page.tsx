@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import { getPlaidItems } from "@/lib/supabase/plaid";
 import BudgetClient from "@/components/BudgetClient";
@@ -16,5 +17,9 @@ export default async function BudgetPage() {
     }
   }
 
-  return <BudgetClient initialConnected={connectedAccounts} userId={userId} />;
+  return (
+    <Suspense>
+      <BudgetClient initialConnected={connectedAccounts} userId={userId} />
+    </Suspense>
+  );
 }

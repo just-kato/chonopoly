@@ -6,6 +6,7 @@ import { ActiveContext } from "@/lib/goals/types";
 import { ViewState } from "./types";
 import GoalsPanel, { type GoalsPanelHandle } from "@/components/GoalsPanel";
 import BillsPanel, { type BillsPanelHandle } from "@/components/bills/BillsPanel";
+import { Account } from "@/components/budget/types";
 import DebtPanel, { type DebtPanelHandle } from "@/components/debts/DebtPanel";
 import AssetsSection, { type AssetsSectionHandle } from "@/components/assets/AssetsSection";
 import BudgetTableView from "./BudgetTableView";
@@ -39,6 +40,10 @@ interface ManagePanelProps {
   budgetsPanelSlot: React.ReactNode;
   /** Ref populated by BudgetsPanel so ManagePanel can trigger its create form */
   budgetCreateRef: React.MutableRefObject<(() => void) | null>;
+  /** Threaded from BudgetClient for BillsPanel cash-projection chart seed */
+  accounts?: Account[];
+  /** Threaded from BudgetClient top-level goals fetch; passed to BudgetTableView */
+  goals: { id: string; name: string; icon: string }[];
 }
 
 // ─── Section metadata ─────────────────────────────────────────────────────────
@@ -92,6 +97,8 @@ export default function ManagePanel({
   setPendingDebtLink,
   budgetsPanelSlot,
   budgetCreateRef,
+  accounts,
+  goals,
 }: ManagePanelProps) {
   const [activeSection, setActiveSection] = useState<Section>("budgets");
 
@@ -251,7 +258,7 @@ export default function ManagePanel({
 
         {/* Panels */}
         {activeSection === "budgets" && (
-          budgetsView === "card" ? budgetsPanelSlot : <BudgetTableView onEdit={() => setCurrentView("card")} />
+          budgetsView === "card" ? budgetsPanelSlot : <BudgetTableView onEdit={() => setCurrentView("card")} goals={goals} />
         )}
 
         {activeSection === "goals" && (
@@ -262,7 +269,7 @@ export default function ManagePanel({
 
         {activeSection === "bills" && (
           billsView === "card"
-            ? <BillsPanel ref={billsRef} />
+            ? <BillsPanel ref={billsRef} accounts={accounts} />
             : <BillTableView onEdit={() => setCurrentView("card")} />
         )}
 

@@ -34,11 +34,12 @@ import BudgetWizard, { EditingBudget, WizardSnapshot } from "./budget/BudgetWiza
 import GoalWizard from "@/components/goals/GoalWizard";
 import OnboardingChecklist from "./OnboardingChecklist";
 import BudgetDrillDown from "./budget/BudgetDrillDown";
+import StatusPage from "./budget/StatusPage";
 import CategoryPill from "./budget/CategoryPill";
 import { StatCard } from "./budget/StatCard";
 import DailyDigest from "./budget/DailyDigest";
 import {
-  Account, ConnectedItem, Transaction, ViewState,
+  Account, ConnectedItem, Transaction, ViewState, BudgetSummaryRow,
   formatDate, formatMoney, getCategoryMeta, CATEGORY_META,
 } from "./budget/types";
 
@@ -771,32 +772,6 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
 // ─── All accounts panel ───────────────────────────────────────────────────────
 
 // ─── Budgets panel ────────────────────────────────────────────────────────────
-
-interface BudgetSummaryRow {
-  budget_id: string;
-  goal_id: string;
-  name: string | null;
-  category_name: string;
-  category_color: string;
-  category_icon: string;
-  total_limit: number;
-  effective_limit: number;
-  amount_spent: number;
-  amount_remaining: number;
-  percent_used: number;
-  over_budget: boolean;
-  period_type: string;
-  period_start: string;
-  period_end: string;
-  days_remaining: number;
-  daily_rate: number;
-  transaction_count: number;
-  notified_80: boolean;
-  notified_over: boolean;
-  nudge_sent: boolean;
-  status: "active" | "paused";
-}
-
 
 function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext, goals }: {
   onGoTo: (view: ViewState) => void;
@@ -1810,6 +1785,11 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const [teamWizardOpen, setTeamWizardOpen] = useState(false);
   const [goals, setGoals] = useState<GoalSummary[]>([]);
 
+  // Manage tab sub-navigation: status (default) → all (ManagePanel) or drilldown
+  type ManageSubView = "status" | "all" | "drilldown";
+  const [manageSubView, setManageSubView] = useState<ManageSubView>("status");
+  const [drillDownBudget, setDrillDownBudget] = useState<BudgetSummaryRow | null>(null);
+
   useEffect(() => {
     if (!userId) return;
     // Restore saved context from localStorage, fall back to personal
@@ -1995,6 +1975,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   }
 
   function navTo(v: ViewState) {
+    if (v === "manage") setManageSubView("status");
     setView(v);
     setSearch("");
     if (typeof v === "string") {
@@ -2442,7 +2423,16 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 onTeamLeft={() => { setTeams(prev => prev.filter(t => t.id !== activeContext.id)); resetToPersonal(); }}
               />
             )}
-            {view === "manage" && (
+            {view === "manage" && manageSubView === "status" && (
+              <StatusPage
+                activeContext={activeContext}
+                goals={goals}
+                onManageAll={() => setManageSubView("all")}
+                onBudgetDrillDown={(budget) => { setDrillDownBudget(budget); setManageSubView("drilldown"); }}
+                onGoTo={navTo}
+              />
+            )}
+            {view === "manage" && manageSubView === "all" && (
               <ManagePanel
                 activeContext={activeContext}
                 onNavigate={navTo}
@@ -2454,6 +2444,14 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 budgetCreateRef={budgetCreateRef}
                 accounts={accounts}
                 goals={goals}
+              />
+            )}
+            {view === "manage" && manageSubView === "drilldown" && drillDownBudget && (
+              <BudgetDrillDown
+                budget={drillDownBudget}
+                contextType={activeContext.type}
+                contextId={activeContext.id}
+                onBack={() => setManageSubView("status")}
               />
             )}
 

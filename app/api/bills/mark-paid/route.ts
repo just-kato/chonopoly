@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { resolveContext } from "@/lib/context";
 
 function serviceDb() {
   return createServiceClient(
@@ -14,20 +15,30 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { bill_id: string; amount: number; period: string };
-  const { bill_id, amount, period } = body;
+  const body = await req.json() as {
+    bill_id: string;
+    amount: number;
+    period: string;
+    context_type?: string;
+    context_id?: string;
+  };
+  const { bill_id, amount, period, context_type, context_id } = body;
   if (!bill_id || !amount || !period) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const ctx = await resolveContext(context_type, context_id, user.id);
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const db = serviceDb();
 
-  // Ownership check
+  // Ownership check — bill must belong to the resolved context
   const { data: bill, error: fetchErr } = await db
     .from("bills")
     .select("id, owner_id")
     .eq("id", bill_id)
-    .eq("owner_id", user.id)
+    .eq("context_type", ctx.type)
+    .eq("context_id", ctx.id)
     .single();
 
   if (fetchErr || !bill) {
@@ -62,20 +73,29 @@ export async function DELETE(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { bill_id: string; payment_id: string };
-  const { bill_id, payment_id } = body;
+  const body = await req.json() as {
+    bill_id: string;
+    payment_id: string;
+    context_type?: string;
+    context_id?: string;
+  };
+  const { bill_id, payment_id, context_type, context_id } = body;
   if (!bill_id || !payment_id) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const ctx = await resolveContext(context_type, context_id, user.id);
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const db = serviceDb();
 
-  // Ownership check
+  // Ownership check — bill must belong to the resolved context
   const { data: bill, error: fetchErr } = await db
     .from("bills")
     .select("id, owner_id")
     .eq("id", bill_id)
-    .eq("owner_id", user.id)
+    .eq("context_type", ctx.type)
+    .eq("context_id", ctx.id)
     .single();
 
   if (fetchErr || !bill) {

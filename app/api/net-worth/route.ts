@@ -5,8 +5,7 @@ import { resolveContext } from "@/lib/context";
 import { getAssetSummary } from "@/lib/assets/assetService";
 import { getDebtSummary } from "@/lib/debts/debtService";
 import { getPlaidItems } from "@/lib/supabase/plaid";
-import { plaidClient } from "@/lib/plaid";
-import { log } from "@/lib/logger";
+import { refreshLiquidBalances, type LiquidAccount } from "@/lib/plaidRefreshBalances";
 
 function db() {
   return createServiceClient(
@@ -32,41 +31,43 @@ export async function GET(request: Request) {
     getDebtSummary(user.id, ctx),
   ]);
 
-  // Fetch cached Plaid balances — use goal_accounts cached_balance to avoid live Plaid calls
-  // Fall back to live Plaid if needed (first-time net worth load)
   let liquid_assets = 0;
-  const liquid_accounts: { name: string; balance: number; subtype: string | null }[] = [];
+  let liquid_accounts: LiquidAccount[] = [];
+  let source: "cache" | "stale" = "cache";
+  let refreshed_at: string | null = null;
 
-  try {
-    const { data: items } = await getPlaidItems(user.id);
-    if (items?.length) {
-      const results = await Promise.all(
-        items.map(item =>
-          plaidClient.accountsGet({ access_token: item.access_token })
-            .then(r => r.data.accounts
-              .filter(a => ["depository", "investment"].includes(a.type))
-              .map(a => ({ name: a.name, balance: a.balances.current ?? 0, subtype: a.subtype ?? null }))
-            )
-            .catch((err) => {
-              log('error', 'Plaid accountsGet failed in net-worth', {
-                route: '/api/net-worth',
-                itemId: item.item_id,
-                institution: item.institution_name,
-                error: (err as { response?: { data?: unknown } })?.response?.data ?? err,
-              });
-              return [] as { name: string; balance: number; subtype: string | null }[];
-            })
-        )
-      );
-      for (const group of results) {
-        for (const acct of group) {
-          liquid_assets += acct.balance;
-          liquid_accounts.push(acct);
-        }
-      }
+  const { data: items } = await getPlaidItems(user.id);
+
+  if (items?.length) {
+    type CachedItem = typeof items[0] & {
+      liquid_balance: number | null;
+      liquid_accounts_json: LiquidAccount[] | null;
+      balances_refreshed_at: string | null;
+    };
+
+    const typed = items as CachedItem[];
+    const staleItems = typed.filter(i => !i.balances_refreshed_at);
+
+    if (staleItems.length > 0) {
+      // First load for these items: await a live refresh so the user sees correct balances.
+      source = "stale";
+      const result = await refreshLiquidBalances(user.id, staleItems, db());
+      liquid_assets  += result.total;
+      liquid_accounts = [...liquid_accounts, ...result.accounts];
     }
-  } catch {
-    // No Plaid items or connection issue — liquid assets = 0
+
+    // Read from cache for items that already have a populated balances_refreshed_at.
+    const cachedItems = typed.filter(i => !!i.balances_refreshed_at);
+    for (const item of cachedItems) {
+      liquid_assets += item.liquid_balance ?? 0;
+      for (const a of item.liquid_accounts_json ?? []) liquid_accounts.push(a);
+    }
+
+    // refreshed_at = oldest cached timestamp (signals how stale the data is)
+    const timestamps = cachedItems
+      .map(i => i.balances_refreshed_at!)
+      .sort();
+    refreshed_at = timestamps[0] ?? null;
   }
 
   const manual_assets  = assets.reduce((s, a) => s + a.current_value, 0);
@@ -83,5 +84,7 @@ export async function GET(request: Request) {
     liquid_accounts,
     assets,
     debts: debts.filter(d => d.status === "active"),
+    refreshed_at,
+    source,
   });
 }

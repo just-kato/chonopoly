@@ -49,12 +49,10 @@ Deno.serve(async () => {
 
   // ── 2. Linked accounts for all goals via goal_accounts ────────────────────
   // Join plaid_items to get the access_token for each item_id.
-  // Only savings accounts contribute to goal balance
   const { data: accountRows, error: accountsErr } = await db
     .from("goal_accounts")
     .select("goal_id, plaid_account_id, plaid_item_id, plaid_items!inner(access_token)")
-    .in("goal_id", goalIds)
-    .eq("account_role", "savings");
+    .in("goal_id", goalIds);
 
   if (accountsErr) {
     console.error("[sync-goal-balances] failed to fetch goal_accounts:", accountsErr.message);

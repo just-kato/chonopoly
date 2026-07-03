@@ -14,24 +14,12 @@ import { StatCard } from "@/components/budget/StatCard";
 import type { Bill } from "@/components/bills/BillsWidget";
 import BillDetailModal from "@/components/bills/BillDetailModal";
 import { BillWizard } from "@/components/bills/BillWizard";
+import { isPaidThisCycle } from "@/lib/budget/verdict";
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isPaidThisCycle(bill: Bill): boolean {
-  if (!bill.last_paid_at) return false;
-  const paid = new Date(bill.last_paid_at);
-  const today = new Date();
-  if (bill.recurrence === "monthly")
-    return paid.getFullYear() === today.getFullYear() && paid.getMonth() === today.getMonth();
-  if (bill.recurrence === "weekly")
-    return (today.getTime() - paid.getTime()) / 86400000 < 7;
-  if (bill.recurrence === "yearly")
-    return paid.getFullYear() === today.getFullYear();
-  return !!bill.last_paid_at;
 }
 
 function getDaysUntil(nextDueDate: string): number {
@@ -858,10 +846,12 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
 type PanelView = "grid" | "chart" | "calendar";
 
 export interface BillsPanelHandle { triggerCreate: () => void }
+interface BillsPanelOwnProps { accounts?: Account[] }
 
-const BillsPanel = forwardRef<BillsPanelHandle>(function BillsPanel(_, ref) {
+const BillsPanel = forwardRef<BillsPanelHandle, BillsPanelOwnProps>(
+  function BillsPanel({ accounts: accountsProp }, ref) {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>(accountsProp ?? []);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<PanelView>("grid");
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
@@ -882,17 +872,20 @@ const BillsPanel = forwardRef<BillsPanelHandle>(function BillsPanel(_, ref) {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [billsRes, txRes] = await Promise.all([
-        fetch("/api/bills"),
-        fetch("/api/plaid/transactions"),
-      ]);
+      const billsRes = await fetch("/api/bills");
       const billsData = billsRes.ok ? await billsRes.json() : { bills: [] };
-      const txData = txRes.ok ? await txRes.json() : { accounts: [] };
       setBills(billsData.bills ?? []);
-      setAccounts(txData.accounts ?? []);
+      if (!accountsProp) {
+        // Fallback: fetch accounts independently when not provided by parent
+        const txRes = await fetch("/api/plaid/transactions");
+        const txData = txRes.ok ? await txRes.json() : { accounts: [] };
+        setAccounts(txData.accounts ?? []);
+      }
       setLoading(false);
     }
     init();
+  // accountsProp intentionally excluded — only used as seed on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function markUnpaid(bill: Bill) {

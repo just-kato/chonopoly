@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { resolveContext } from "@/lib/context";
+import { cycleDueDates } from "@/lib/bills/cycle";
 
 function serviceDb() {
   return createServiceClient(
@@ -9,51 +11,18 @@ function serviceDb() {
   );
 }
 
-// Compute the next due date for a bill from its recurrence rules and last_paid_at.
-// Returns a Date representing the next upcoming due occurrence on or after today.
-function computeNextDueDate(bill: {
-  due_day: number;
-  recurrence: string;
-  last_paid_at: string | null;
-}): Date {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (bill.recurrence === "monthly") {
-    // Next occurrence of due_day in current or next month
-    const candidate = new Date(today.getFullYear(), today.getMonth(), bill.due_day);
-    if (candidate < today) candidate.setMonth(candidate.getMonth() + 1);
-    return candidate;
-  }
-
-  if (bill.recurrence === "weekly") {
-    // due_day = ISO weekday 1–7 (Mon–Sun)
-    const isoDay = bill.due_day < 1 ? 1 : bill.due_day > 7 ? 7 : bill.due_day;
-    const todayIso = today.getDay() === 0 ? 7 : today.getDay();
-    let daysUntil = isoDay - todayIso;
-    if (daysUntil < 0) daysUntil += 7;
-    const candidate = new Date(today);
-    candidate.setDate(today.getDate() + daysUntil);
-    return candidate;
-  }
-
-  if (bill.recurrence === "yearly") {
-    // due_day = day-of-year (1–366)
-    const candidate = new Date(today.getFullYear(), 0, bill.due_day);
-    if (candidate < today) candidate.setFullYear(candidate.getFullYear() + 1);
-    return candidate;
-  }
-
-  // one-time: due_day is day-of-month; use current month if not yet paid
-  const candidate = new Date(today.getFullYear(), today.getMonth(), bill.due_day);
-  return candidate;
-}
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const rawType = searchParams.get("context_type");
+    const rawId = searchParams.get("context_id");
+
+    const ctx = await resolveContext(rawType, rawId, user.id);
+    if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const db = serviceDb();
 
@@ -65,7 +34,8 @@ export async function GET() {
           id, paid_at, amount, period, created_at
         )
       `)
-      .eq("owner_id", user.id)
+      .eq("context_type", ctx.type)
+      .eq("context_id", ctx.id)
       .eq("is_active", true)
       .order("due_day", { ascending: true });
 
@@ -87,7 +57,7 @@ export async function GET() {
         )
         .slice(0, 3);
 
-      const nextDueDate = computeNextDueDate(bill);
+      const nextDueDate = cycleDueDates(bill, new Date()).next;
 
       return {
         ...bill,
@@ -120,12 +90,22 @@ export async function POST(req: NextRequest) {
     category_id?: string;
     is_auto_detected?: boolean;
     plaid_merchant?: string;
+    context_type?: string;
+    context_id?: string;
   };
 
-  const { name, amount, due_day, recurrence, category_id, is_auto_detected, plaid_merchant } = body;
+  const {
+    name, amount, due_day, recurrence,
+    category_id, is_auto_detected, plaid_merchant,
+    context_type, context_id,
+  } = body;
+
   if (!name || !amount || !due_day || !recurrence) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+
+  const ctx = await resolveContext(context_type, context_id, user.id);
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const db = serviceDb();
   const { data, error } = await db
@@ -133,6 +113,8 @@ export async function POST(req: NextRequest) {
     .insert({
       owner_id: user.id,
       owner_type: "personal",
+      context_type: ctx.type,
+      context_id: ctx.id,
       name,
       amount,
       due_day,
@@ -157,16 +139,28 @@ export async function PATCH(req: NextRequest) {
   const { bill_id, ...fields } = body;
   if (!bill_id) return NextResponse.json({ error: "Missing bill_id" }, { status: 400 });
 
+  const ctx = await resolveContext(
+    fields["context_type"] as string | undefined,
+    fields["context_id"] as string | undefined,
+    user.id
+  );
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   // Strip fields that must not be updated externally
-  const { id: _id, owner_id: _oid, created_at: _ca, ...safeFields } = fields as Record<string, unknown>;
-  void _id; void _oid; void _ca;
+  const {
+    id: _id, owner_id: _oid, created_at: _ca,
+    context_type: _ct, context_id: _ci,
+    ...safeFields
+  } = fields as Record<string, unknown>;
+  void _id; void _oid; void _ca; void _ct; void _ci;
 
   const db = serviceDb();
   const { data, error } = await db
     .from("bills")
     .update(safeFields)
     .eq("id", bill_id)
-    .eq("owner_id", user.id)
+    .eq("context_type", ctx.type)
+    .eq("context_id", ctx.id)
     .select()
     .single();
 
@@ -179,16 +173,20 @@ export async function DELETE(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { bill_id: string };
-  const { bill_id } = body;
+  const body = await req.json() as { bill_id: string; context_type?: string; context_id?: string };
+  const { bill_id, context_type, context_id } = body;
   if (!bill_id) return NextResponse.json({ error: "Missing bill_id" }, { status: 400 });
+
+  const ctx = await resolveContext(context_type, context_id, user.id);
+  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const db = serviceDb();
   const { error } = await db
     .from("bills")
     .update({ is_active: false })
     .eq("id", bill_id)
-    .eq("owner_id", user.id);
+    .eq("context_type", ctx.type)
+    .eq("context_id", ctx.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

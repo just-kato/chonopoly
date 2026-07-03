@@ -220,6 +220,87 @@ export async function rolloverBudgets(_userId: string): Promise<void> {
   // no-op until Step 5
 }
 
+// ─── matchesBudget ───────────────────────────────────────────────────────────
+// Single filter predicate shared by getBudgetData (spend calc) and
+// getBudgetTransactions (detail list). Ensures the sum on the receipt always
+// equals the spend figure by construction.
+
+export function matchesBudget(
+  tx: { plaid_account_id: string; category_primary: string | null; amount: unknown; date: string },
+  categoryId: string,
+  periodStart: string,
+  periodEnd: string,
+  linkedAccountIds: Set<string>
+): boolean {
+  return (
+    Number(tx.amount) > 0 &&
+    tx.category_primary === categoryId &&
+    tx.date >= periodStart &&
+    tx.date <= periodEnd &&
+    linkedAccountIds.has(tx.plaid_account_id)
+  );
+}
+
+export type DetailTxRow = {
+  id: string;
+  merchant_name: string | null;
+  name: string | null;
+  date: string;
+  amount: number;
+};
+
+export async function getBudgetTransactions(
+  userId: string,
+  ctx: RequestContext,
+  budgetId: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<{ transactions: DetailTxRow[]; sum: number }> {
+  const { data: budget } = await db()
+    .from("budgets")
+    .select("goal_id, category_id")
+    .eq("id", budgetId)
+    .eq("owner_id", ctx.id)
+    .eq("owner_type", ctx.type)
+    .maybeSingle();
+
+  if (!budget) return { transactions: [], sum: 0 };
+
+  const { data: goalAccountRows } = await db()
+    .from("goal_accounts")
+    .select("plaid_account_id")
+    .eq("goal_id", budget.goal_id);
+
+  const linkedAccountIds = new Set((goalAccountRows ?? []).map((r: { plaid_account_id: string }) => r.plaid_account_id));
+  if (linkedAccountIds.size === 0) return { transactions: [], sum: 0 };
+
+  const { data: txRows } = await db()
+    .from("plaid_transactions")
+    .select("id, merchant_name, name, date, amount, plaid_account_id, category_primary")
+    .eq("user_id", userId)
+    .gte("date", periodStart)
+    .lte("date", periodEnd)
+    .eq("pending", false);
+
+  const matched = (txRows ?? []).filter((tx: { plaid_account_id: string; category_primary: string | null; amount: unknown; date: string }) =>
+    matchesBudget(tx, budget.category_id, periodStart, periodEnd, linkedAccountIds)
+  );
+
+  const sum = Math.round(matched.reduce((s: number, tx: { amount: unknown }) => s + Number(tx.amount), 0) * 100) / 100;
+
+  const transactions: DetailTxRow[] = matched
+    .sort((a: { date: string }, b: { date: string }) => b.date.localeCompare(a.date))
+    .map((tx: { id: string; merchant_name: string | null; name: string | null; date: string; amount: unknown }) => ({
+      id: tx.id,
+      merchant_name: tx.merchant_name ?? null,
+      name: tx.name ?? null,
+      date: tx.date,
+      amount: Number(tx.amount),
+    }));
+
+  return { transactions, sum };
+}
+
 // ─── getBudgetData ────────────────────────────────────────────────────────────
 // Queries new budgets schema. Spending is attributed via goal_accounts →
 // plaid_transactions. Uses budget_daily_snapshots when available (written by
@@ -235,11 +316,13 @@ export async function getBudgetData(
   const hit = budgetCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return hit.data;
 
+  const today = new Date().toISOString().split("T")[0];
   const budgetsQuery = db()
     .from("budgets")
     .select("id, goal_id, name, category_id, period_type, period_start, period_end, total_limit, rollover_enabled, status")
     .eq("owner_type", ctx.type)
-    .eq("owner_id", ctx.id);
+    .eq("owner_id", ctx.id)
+    .gte("period_end", today); // exclude cron-retired historical rows; keep manually-paused current-period rows
 
   const { data: budgets } = await (goalId ? budgetsQuery.eq("goal_id", goalId) : budgetsQuery);
 
@@ -305,13 +388,7 @@ export async function getBudgetData(
       dailyRate = Number(snapshot.daily_rate);
     } else {
       // Live fallback: sum transactions within this budget's period from linked accounts
-      const periodTx = allTx.filter(tx =>
-        Number(tx.amount) > 0 &&
-        tx.category_primary === b.category_id &&
-        tx.date >= b.period_start &&
-        tx.date <= b.period_end &&
-        linkedAccountIds.has(tx.plaid_account_id)
-      );
+      const periodTx = allTx.filter(tx => matchesBudget(tx, b.category_id, b.period_start, b.period_end, linkedAccountIds));
       amountSpent = periodTx.reduce((s, t) => s + Number(t.amount), 0);
       const endMs = new Date(b.period_end + "T23:59:59").getTime();
       daysRemaining = Math.max(0, Math.ceil((endMs - Date.now()) / 86_400_000));
@@ -323,11 +400,7 @@ export async function getBudgetData(
     const amountRemaining = Math.max(0, effectiveLimit - amountSpent);
     const percentUsed = effectiveLimit > 0 ? (amountSpent / effectiveLimit) * 100 : 0;
     const transactionCount = allTx.filter(tx =>
-      Number(tx.amount) > 0 &&
-      tx.category_primary === b.category_id &&
-      tx.date >= b.period_start &&
-      tx.date <= b.period_end &&
-      linkedAccountIds.has(tx.plaid_account_id)
+      matchesBudget(tx, b.category_id, b.period_start, b.period_end, linkedAccountIds)
     ).length;
 
     return {

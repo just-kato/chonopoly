@@ -22,6 +22,8 @@ const ActivityChart = dynamic(() => import("./budget/ActivityChart"), { ssr: fal
 const BillsWidget = dynamic(() => import("./bills/BillsWidget"), { ssr: false });
 const BillsPanel = dynamic(() => import("./bills/BillsPanel"), { ssr: false });
 const TrendCharts = dynamic(() => import("./budget/TrendCharts"), { ssr: false });
+const TeamSetupWizard = dynamic(() => import("./teams/TeamSetupWizard"), { ssr: false });
+import TeamSettingsPanel from "./teams/TeamSettingsPanel";
 import GoalsPanel from "./GoalsPanel";
 import DebtPanel from "./debts/DebtPanel";
 import AssetsSection from "./assets/AssetsSection";
@@ -279,15 +281,8 @@ function BudgetHealthMini({ activeContext, onNavigate }: { activeContext: Active
 
 // ─── Goal progress mini widget ────────────────────────────────────────────────
 
-function GoalProgressMini({ activeContext, onNavigate }: { activeContext: ActiveContext; onNavigate: (v: ViewState) => void }) {
-  const [goals, setGoals] = useState<GoalSummary[]>([]);
-
-  useEffect(() => {
-    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
-      .then(r => r.ok ? r.json() : { goals: [] })
-      .then(d => setGoals((d.goals ?? []).filter((g: GoalSummary) => g.status === "active")))
-      .catch(() => {});
-  }, [activeContext.type, activeContext.id]);
+function GoalProgressMini({ goals: allGoals, onNavigate }: { goals: GoalSummary[]; onNavigate: (v: ViewState) => void }) {
+  const goals = allGoals.filter(g => g.status === "active");
 
   const slots = goals.slice(0, 3);
   const placeholders = Math.max(0, 3 - slots.length);
@@ -803,10 +798,11 @@ interface BudgetSummaryRow {
 }
 
 
-function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
+function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext, goals }: {
   onGoTo: (view: ViewState) => void;
   triggerCreateRef?: React.MutableRefObject<(() => void) | null>;
   activeContext: ActiveContext;
+  goals: GoalSummary[];
 }) {
   const [summaries, setSummaries] = useState<BudgetSummaryRow[]>([]);
   const [totals, setTotals] = useState<{ total_budgeted: number; total_spent: number; monthly_income: number } | null>(null);
@@ -820,7 +816,12 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [goalsCount, setGoalsCount] = useState<number | null>(null);
+
+  const goalsCount = goals.length;
+  const goalNameMap = useMemo(
+    () => new Map(goals.map(g => [g.id, { name: g.name, icon: g.icon }])),
+    [goals]
+  );
 
   const loadSummaries = useCallback(async () => {
     const res = await fetch("/api/budget/summary");
@@ -831,13 +832,6 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   }, []);
 
   useEffect(() => { loadSummaries(); }, [loadSummaries]);
-
-  useEffect(() => {
-    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
-      .then(r => r.ok ? r.json() : { goals: [] })
-      .then((d: { goals?: unknown[] }) => setGoalsCount((d.goals ?? []).length))
-      .catch(() => setGoalsCount(0));
-  }, [activeContext.type, activeContext.id]);
 
   async function pauseBudget(budgetId: string, currentStatus: "active" | "paused") {
     await fetch("/api/budget/update", {
@@ -894,7 +888,14 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   const selectedBudget = selectedBudgetId ? summaries.find(s => s.budget_id === selectedBudgetId) ?? null : null;
 
   if (selectedBudget) {
-    return <BudgetDrillDown budget={selectedBudget} onBack={() => setSelectedBudgetId(null)} />;
+    return (
+      <BudgetDrillDown
+        budget={selectedBudget}
+        contextType={activeContext.type}
+        contextId={activeContext.id}
+        onBack={() => setSelectedBudgetId(null)}
+      />
+    );
   }
 
   return (
@@ -1029,6 +1030,10 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
                       } as React.CSSProperties}
                     />
                   </div>
+                  {/* Row 2.5: Goal chip */}
+                  {(() => { const g = goalNameMap.get(s.goal_id); return g ? (
+                    <p className="text-[10px] text-(--color-text-tertiary) mb-1.5">{g.icon} {g.name}</p>
+                  ) : null; })()}
                   {/* Row 3: Spent / limit · status */}
                   <div className="flex items-center justify-between text-[12px] text-(--color-text-tertiary)">
                     <span className="font-(--font-mono)">${formatMoney(s.amount_spent)} / ${formatMoney(s.effective_limit)}</span>
@@ -1071,6 +1076,12 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
                         {s.transaction_count > 0 && (
                           <span className="text-[10px] text-(--color-text-tertiary)">{s.transaction_count} txn{s.transaction_count !== 1 ? "s" : ""}</span>
                         )}
+                        {(() => { const g = goalNameMap.get(s.goal_id); return g ? (
+                          <span className="inline-flex items-center gap-1 max-w-[120px] px-1.5 py-0.5 rounded-(--radius-pill) bg-(--color-overlay) text-(--color-text-secondary) text-[10px] overflow-hidden">
+                            <span className="shrink-0">{g.icon}</span>
+                            <span className="truncate min-w-0">{g.name}</span>
+                          </span>
+                        ) : null; })()}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
@@ -1281,29 +1292,22 @@ function AnalyticsPanel({
   transactions,
   accounts,
   onGoTo,
+  goals,
 }: {
   transactions: Transaction[];
   accounts: Account[];
   onGoTo: (view: ViewState) => void;
+  goals: GoalSummary[];
 }) {
   const [period, setPeriod] = useState<Period>('MONTH');
-  const [goalTarget, setGoalTarget] = useState<number | null>(null);
-  const [goalTargetLoading, setGoalTargetLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/goals/summary")
-      .then(r => r.json())
-      .then((d: { goals?: { name?: string; goal_type?: string; target_amount?: number }[] }) => {
-        const dpGoal = (d.goals ?? []).find(g =>
-          g.name?.toLowerCase().includes("down payment") ||
-          g.name?.toLowerCase().includes("down") ||
-          g.goal_type === "down_payment"
-        );
-        setGoalTarget(dpGoal?.target_amount ?? 30000);
-        setGoalTargetLoading(false);
-      })
-      .catch(() => { setGoalTarget(30000); setGoalTargetLoading(false); });
-  }, []);
+  const dpGoal = goals.find(g =>
+    g.name?.toLowerCase().includes("down payment") ||
+    g.name?.toLowerCase().includes("down") ||
+    g.goal_type === "down_payment"
+  );
+  const goalTarget = dpGoal?.target_amount ?? 30000;
+  const goalTargetLoading = false;
 
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -1803,6 +1807,8 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
 
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [activeContext, setActiveContext] = useState<ActiveContext>({ type: "personal", id: userId });
+  const [teamWizardOpen, setTeamWizardOpen] = useState(false);
+  const [goals, setGoals] = useState<GoalSummary[]>([]);
 
   useEffect(() => {
     if (!userId) return;
@@ -1827,6 +1833,13 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
       .then(d => setTeams(d.teams ?? []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
+      .then(r => r.ok ? r.json() : { goals: [] })
+      .then((d: { goals?: GoalSummary[] }) => setGoals(d.goals ?? []))
+      .catch(() => {});
+  }, [activeContext.type, activeContext.id]);
 
   useEffect(() => {
     loadProfile().then(p => {
@@ -1854,6 +1867,12 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const contextLabel = activeContext.type === "personal"
     ? "Personal"
     : (teams.find(t => t.id === activeContext.id)?.name ?? "Team");
+
+  const activeTeamName = activeContext.type === "team"
+    ? (teams.find(t => t.id === activeContext.id)?.name ?? "Team")
+    : null;
+  const contextOwner = activeTeamName ?? "Your";
+  const contextOwnerLower = activeTeamName?.toLowerCase() ?? "your";
 
   useEffect(() => {
     fetch("/api/plaid/create-link-token", { method: "POST" })
@@ -1993,6 +2012,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
     { id: "manage"       as ViewState, icon: <LayoutGrid size={16} />,      label: "Manage" },
     { id: "transactions" as ViewState, icon: <Search size={16} />,          label: "Transactions" },
     { id: "analytics"    as ViewState, icon: <PieChart size={16} />,        label: "Analytics" },
+    { id: "profile"      as ViewState, icon: <User size={16} />,            label: "Profile" },
   ];
 
   const panelProps: PanelProps = { transactions, accountMap, categoryOverrides, onChangeCategory: changeCategory, search, onSearch: setSearch };
@@ -2035,7 +2055,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
       >
         {/* Back + label */}
         <div className="px-4 pt-5 pb-3 flex items-center gap-2 border-b border-(--color-border-subtle)">
-          <Link href="/" aria-label="Arrow back" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"><ArrowLeft size={14} /></Link>
+          <Link href="/course" aria-label="Arrow back" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"><ArrowLeft size={14} /></Link>
           <span className="text-[10px] text-(--color-text-disabled) uppercase tracking-[0.1em] font-medium">Finances</span>
         </div>
 
@@ -2102,9 +2122,9 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               key={team.id}
               data-testid={`context-team-${team.id}`}
               onClick={() => switchContext({ type: "team", id: team.id })}
-              className={`w-full flex items-center justify-between h-9 transition-colors ${
+              className={`w-full flex items-center justify-between h-9 transition-colors rounded-sm pl-1 ${
                 activeContext.type === "team" && activeContext.id === team.id
-                  ? "text-(--color-accent)"
+                  ? "text-(--color-accent) bg-(--color-accent)/5 border-l-2 border-(--color-accent)"
                   : "text-(--color-text-secondary) hover:text-(--color-text-primary)"
               }`}
             >
@@ -2117,6 +2137,13 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               )}
             </button>
           ))}
+          <button
+            onClick={() => setTeamWizardOpen(true)}
+            className="flex items-center gap-[10px] h-9 text-[13px] text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors w-full"
+          >
+            <Plus size={16} className="shrink-0" />
+            New team
+          </button>
           {activeContext.type === "team" && (
             <div data-testid="context-banner" className="flex items-center justify-between py-1 mt-0.5">
               <span className="text-[11px] text-(--color-text-secondary) truncate">{contextLabel}</span>
@@ -2129,6 +2156,15 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 <RotateCcw size={10} />
               </button>
             </div>
+          )}
+          {activeContext.type === "team" && (
+            <button
+              onClick={() => navTo("team-settings")}
+              className="flex items-center gap-[10px] h-8 text-[11px] text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors w-full mt-0.5"
+            >
+              <Settings2 size={13} className="shrink-0" />
+              Team settings
+            </button>
           )}
           <hr className="border-(--color-border-subtle) mt-2" />
         </div>
@@ -2222,9 +2258,16 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
 
         {/* Mobile top bar — identity + avatar; no hamburger */}
         <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-(--color-base) border-b border-(--color-border-subtle) flex items-center justify-between px-4 shrink-0">
-          <span className="text-[10px] uppercase tracking-[0.12em] text-(--color-text-disabled) font-medium">
-            Park Properties
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-(--color-text-disabled) font-medium">
+              Park Properties
+            </span>
+            {activeTeamName && (
+              <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-(--color-accent)/15 text-(--color-accent) border border-(--color-accent)/30 self-start">
+                {activeTeamName}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {connected.length > 0 && (
               <button
@@ -2349,7 +2392,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 )}
                 {mobileOverviewTab === 'budgets' && (
                   <div className="p-4">
-                    <BudgetsPanel onGoTo={navTo} activeContext={activeContext} />
+                    <BudgetsPanel onGoTo={navTo} activeContext={activeContext} goals={goals} />
                   </div>
                 )}
               </div>
@@ -2374,11 +2417,11 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               </div>
             )}
             {view === "analytics" && connected.length > 0 && !loading && (
-              <AnalyticsPanel transactions={transactions} accounts={accounts} onGoTo={navTo} />
+              <AnalyticsPanel transactions={transactions} accounts={accounts} onGoTo={navTo} goals={goals} />
             )}
             <div className={view === "analytics" ? "hidden" : (view === "profile" || view === "transactions" || view === "manage") ? "" : "max-w-2xl mx-auto"}>
             {/* Budgets and Goals have their own data fetching */}
-            {view === "budgets" && <BudgetsPanel onGoTo={navTo} activeContext={activeContext} />}
+            {view === "budgets" && <BudgetsPanel onGoTo={navTo} activeContext={activeContext} goals={goals} />}
             {view === "goals"   && <GoalsPanel activeContext={activeContext} contextLabel={contextLabel} onReset={resetToPersonal} />}
             {view === "debts"   && (
               <div className="space-y-8">
@@ -2388,8 +2431,17 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 </div>
               </div>
             )}
-            {view === "bills" && <BillsPanel />}
-            {view === "profile" && <ProfilePanel activeContext={activeContext} onNavigate={navTo} />}
+            {view === "bills" && <BillsPanel accounts={accounts} />}
+            {view === "profile" && <ProfilePanel activeContext={activeContext} onNavigate={navTo} teams={teams} switchContext={switchContext} onAddTeam={() => setTeamWizardOpen(true)} />}
+            {view === "team-settings" && activeContext.type === "team" && (
+              <TeamSettingsPanel
+                teamId={activeContext.id}
+                userId={userId}
+                onBack={() => navTo("overview")}
+                onTeamDeleted={() => { setTeams(prev => prev.filter(t => t.id !== activeContext.id)); resetToPersonal(); navTo("overview"); }}
+                onTeamLeft={() => { setTeams(prev => prev.filter(t => t.id !== activeContext.id)); resetToPersonal(); }}
+              />
+            )}
             {view === "manage" && (
               <ManagePanel
                 activeContext={activeContext}
@@ -2398,8 +2450,10 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 onReset={resetToPersonal}
                 pendingDebtLink={pendingDebtLink}
                 setPendingDebtLink={setPendingDebtLink}
-                budgetsPanelSlot={<BudgetsPanel onGoTo={navTo} triggerCreateRef={budgetCreateRef} activeContext={activeContext} />}
+                budgetsPanelSlot={<BudgetsPanel onGoTo={navTo} triggerCreateRef={budgetCreateRef} activeContext={activeContext} goals={goals} />}
                 budgetCreateRef={budgetCreateRef}
+                accounts={accounts}
+                goals={goals}
               />
             )}
 
@@ -2456,6 +2510,17 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         </div>
       </nav>
 
+      {teamWizardOpen && (
+        <TeamSetupWizard
+          userId={userId}
+          onComplete={(team) => {
+            setTeams(prev => [...prev, team]);
+            switchContext({ type: "team", id: team.id });
+            setTeamWizardOpen(false);
+          }}
+          onClose={() => setTeamWizardOpen(false)}
+        />
+      )}
     </div>
   );
 }

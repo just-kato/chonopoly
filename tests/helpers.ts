@@ -18,7 +18,7 @@ export async function stubDataEndpoints(page: Page, role: "user" | "admin" = "us
           avatar_color: "amber",
           onboarding_complete: true,
           pay_cycle_start_day: 1,
-          morning_report_enabled: true,
+          weekly_report_enabled: true,
           health_score_last_calculated: null,
         },
       ]),

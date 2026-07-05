@@ -31,7 +31,7 @@ async function plaidAccountsGet(accessToken: string): Promise<{ accounts: Array<
 }
 
 Deno.serve(async () => {
-  // ── 1. Active savings goals ───────────────────────────────────────────────
+  // 1. Active savings goals
   const { data: goals, error: goalsErr } = await db
     .from("savings_goals")
     .select("id, owner_id, current_balance, target_amount")
@@ -47,11 +47,13 @@ Deno.serve(async () => {
 
   const goalIds = goals.map(g => g.id);
 
-  // ── 2. Linked accounts for all goals via goal_accounts ────────────────────
-  // Join plaid_items to get the access_token for each item_id.
+  // 2. Linked accounts — two-step query instead of PostgREST join.
+  // goal_accounts.plaid_item_id is the Plaid item_id string (text), not the
+  // UUID primary key of plaid_items, so PostgREST cannot infer the relationship
+  // and plaid_items!inner would fail at schema-cache lookup time.
   const { data: accountRows, error: accountsErr } = await db
     .from("goal_accounts")
-    .select("goal_id, plaid_account_id, plaid_item_id, plaid_items!inner(access_token)")
+    .select("goal_id, plaid_account_id, plaid_item_id")
     .in("goal_id", goalIds);
 
   if (accountsErr) {
@@ -59,15 +61,24 @@ Deno.serve(async () => {
     return new Response(JSON.stringify({ error: accountsErr.message }), { status: 500 });
   }
 
-  // ── 3. Fetch Plaid balances once per unique item_id ───────────────────────
-  // Map item_id → access_token, then call accountsGet once per item.
-  const itemAccessMap = new Map<string, string>();
-  for (const row of accountRows ?? []) {
-    const at = (row.plaid_items as { access_token: string } | null)?.access_token;
-    if (at) itemAccessMap.set(row.plaid_item_id, at);
+  const uniqueItemIds = [...new Set((accountRows ?? []).map(r => r.plaid_item_id))];
+  const { data: plaidItemRows, error: itemsErr } = await db
+    .from("plaid_items")
+    .select("item_id, access_token")
+    .in("item_id", uniqueItemIds);
+
+  if (itemsErr) {
+    console.error("[sync-goal-balances] failed to fetch plaid_items:", itemsErr.message);
+    return new Response(JSON.stringify({ error: itemsErr.message }), { status: 500 });
   }
 
-  // item_id → { account_id → current_balance }
+  // 3. Fetch Plaid balances once per unique item_id
+  const itemAccessMap = new Map<string, string>();
+  for (const item of plaidItemRows ?? []) {
+    itemAccessMap.set(item.item_id, item.access_token);
+  }
+
+  // item_id -> { account_id -> current_balance }
   const itemBalanceMap = new Map<string, Map<string, number>>();
   for (const [itemId, accessToken] of itemAccessMap) {
     try {
@@ -82,7 +93,7 @@ Deno.serve(async () => {
     }
   }
 
-  // ── 4. Sum balances per goal and write updates ────────────────────────────
+  // 4. Sum balances per goal and write updates
   const results = { success: 0, failed: 0 };
 
   for (const goal of goals) {
@@ -116,7 +127,7 @@ Deno.serve(async () => {
 
       await db.from("savings_goal_history").insert({ goal_id: goal.id, balance: newBalance });
 
-      console.log(`[sync-goal-balances] goal ${goal.id}: ${previousBalance} → ${newBalance}`);
+      console.log(`[sync-goal-balances] goal ${goal.id}: ${previousBalance} -> ${newBalance}`);
       results.success++;
     } catch (err) {
       console.error(`[sync-goal-balances] goal ${goal.id} failed:`, err);

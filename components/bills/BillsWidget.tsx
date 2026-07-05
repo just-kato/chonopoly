@@ -7,10 +7,13 @@ import {
 } from "recharts";
 import {
   LayoutGrid, TrendingDown, CalendarDays, Plus,
-  ChevronLeft, ChevronRight, Check, X,
+  Check, X,
 } from "lucide-react";
 import { Account, CATEGORY_META, formatMoney } from "@/components/budget/types";
 import BillDetailModal from "@/components/bills/BillDetailModal";
+import { isPaidThisCycle } from "@/lib/budget/verdict";
+import { isOverdueBill, formatCurrentDue } from "@/lib/bills/cycle";
+import { MonthNav } from "@/components/bills/MonthNav";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,34 +49,6 @@ const CATEGORY_OPTIONS = Object.entries(CATEGORY_META)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isPaidThisCycle(bill: Bill): boolean {
-  if (!bill.last_paid_at) return false;
-  const paid = new Date(bill.last_paid_at);
-  const today = new Date();
-  if (bill.recurrence === "monthly") {
-    return paid.getFullYear() === today.getFullYear() && paid.getMonth() === today.getMonth();
-  }
-  if (bill.recurrence === "weekly") {
-    const diff = (today.getTime() - paid.getTime()) / 86400000;
-    return diff < 7;
-  }
-  if (bill.recurrence === "yearly") {
-    return paid.getFullYear() === today.getFullYear();
-  }
-  return !!bill.last_paid_at;
-}
-
-function getDaysUntil(nextDueDate: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(nextDueDate + "T00:00:00");
-  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
-}
-
 function formatDueDate(nextDueDate: string): string {
   return new Date(nextDueDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -94,17 +69,25 @@ function avatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function groupBills(bills: Bill[]): { overdue: Bill[]; thisWeek: Bill[]; thisMonth: Bill[]; later: Bill[] } {
-  const overdue: Bill[] = [], thisWeek: Bill[] = [], thisMonth: Bill[] = [], later: Bill[] = [];
+function groupBillsForMonth(
+  bills: Bill[],
+  today: Date,
+  viewedMonth: Date,
+): { overdue: Bill[]; dueThisMonth: Bill[]; paid: Bill[] } {
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const billsByDay = buildBillsByDay(bills, year, month, daysInMonth);
+  const inMonth = new Set<string>();
+  for (const arr of Object.values(billsByDay)) for (const b of arr) inMonth.add(b.id);
+
+  const overdue: Bill[] = [], dueThisMonth: Bill[] = [], paid: Bill[] = [];
   for (const b of bills) {
-    if (isPaidThisCycle(b)) { thisMonth.push(b); continue; }
-    const d = getDaysUntil(b.next_due_date);
-    if (d < 0) overdue.push(b);
-    else if (d <= 7) thisWeek.push(b);
-    else if (d <= 31) thisMonth.push(b);
-    else later.push(b);
+    if (isPaidThisCycle(b)) { paid.push(b); continue; }
+    if (isOverdueBill(b, today)) { overdue.push(b); continue; }
+    if (inMonth.has(b.id)) dueThisMonth.push(b);
   }
-  return { overdue, thisWeek, thisMonth, later };
+  return { overdue, dueThisMonth, paid };
 }
 
 // ─── Bill card (grid view) ────────────────────────────────────────────────────
@@ -116,9 +99,9 @@ function BillCard({ bill, onMarkPaid, onMarkUnpaid, onBillClick }: {
   onBillClick: (b: Bill) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const today = new Date();
   const paid = isPaidThisCycle(bill);
-  const daysUntil = getDaysUntil(bill.next_due_date);
-  const overdue = daysUntil < 0 && !paid;
+  const overdue = isOverdueBill(bill, today) && !paid;
   const initial = bill.name.charAt(0).toUpperCase();
   const color = avatarColor(bill.name);
 
@@ -135,7 +118,7 @@ function BillCard({ bill, onMarkPaid, onMarkUnpaid, onBillClick }: {
       <div className="flex-1 min-w-0">
         <p className="text-[13px] text-(--color-text-primary) truncate">{bill.name}</p>
         <p className="text-[11px] text-(--color-text-tertiary)">
-          {paid ? "Paid this cycle" : overdue ? "Overdue" : `Due ${formatDueDate(bill.next_due_date)}`}
+          {paid ? "Paid this cycle" : overdue ? `Overdue since ${formatCurrentDue(bill, today)}` : `Due ${formatDueDate(bill.next_due_date)}`}
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -170,13 +153,15 @@ function BillCard({ bill, onMarkPaid, onMarkUnpaid, onBillClick }: {
 
 // ─── Grid view ────────────────────────────────────────────────────────────────
 
-function GridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
+function GridView({ bills, currentMonth, onMarkPaid, onMarkUnpaid, onBillClick }: {
   bills: Bill[];
+  currentMonth: Date;
   onMarkPaid: (b: Bill) => void;
   onMarkUnpaid: (b: Bill) => void;
   onBillClick: (b: Bill) => void;
 }) {
-  const { overdue, thisWeek, thisMonth, later } = groupBills(bills);
+  const today = new Date();
+  const { overdue, dueThisMonth, paid } = groupBillsForMonth(bills, today, currentMonth);
 
   if (bills.length === 0) {
     return (
@@ -188,9 +173,8 @@ function GridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
 
   const sections = [
     { label: "Overdue", items: overdue },
-    { label: "This week", items: thisWeek },
-    { label: "This month", items: thisMonth },
-    { label: "Later", items: later },
+    { label: "Due this month", items: dueThisMonth },
+    { label: "Paid", items: paid },
   ].filter(s => s.items.length > 0);
 
   return (
@@ -226,31 +210,36 @@ interface ProjectionPoint {
   isToday: boolean;
 }
 
-function buildProjection(bills: Bill[], accounts: Account[]): ProjectionPoint[] {
+function buildProjection(bills: Bill[], accounts: Account[], viewedMonth: Date): ProjectionPoint[] {
   const seed = accounts
     .filter(a => a.type === "depository")
     .reduce((s, a) => s + (a.balances.current ?? 0), 0);
 
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const billsByDay = buildBillsByDay(bills, year, month, daysInMonth);
   const points: ProjectionPoint[] = [];
   let running = seed;
 
-  for (let i = 0; i <= 30; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    const dateStr = toDateStr(date);
-    const isToday = i === 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    date.setHours(0, 0, 0, 0);
+    const isToday = date.getTime() === today.getTime();
+    const isAfterToday = date > today;
 
-    const due = bills.filter(b => b.next_due_date === dateStr && !isPaidThisCycle(b));
+    const due = (billsByDay[d] ?? []).filter(b => !isPaidThisCycle(b));
     for (const b of due) running -= b.amount;
 
     const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     points.push({
       label,
       balance: isToday ? running : 0,
-      past: i === 0 ? running : null,
-      projected: i > 0 ? running : null,
+      past: !isAfterToday ? running : null,
+      projected: isAfterToday ? running : null,
       billsDue: due.map(b => b.name),
       isToday,
     });
@@ -289,8 +278,8 @@ function ChartTooltipContent({
   );
 }
 
-function ChartView({ bills, accounts }: { bills: Bill[]; accounts: Account[] }) {
-  const data = buildProjection(bills, accounts);
+function ChartView({ bills, accounts, currentMonth }: { bills: Bill[]; accounts: Account[]; currentMonth: Date }) {
+  const data = buildProjection(bills, accounts, currentMonth);
   const todayIdx = 0;
 
   return (
@@ -351,6 +340,7 @@ function ChartView({ bills, accounts }: { bills: Bill[]; accounts: Account[] }) 
 
 // ─── Calendar view ────────────────────────────────────────────────────────────
 
+// DRIFT NOTE: uses local-time arithmetic (new Date(year, month, d)); see cycle.ts header comment.
 function buildBillsByDay(
   bills: Bill[],
   year: number,
@@ -394,10 +384,9 @@ function buildBillsByDay(
   return map;
 }
 
-function CalendarView({ bills, currentMonth, onMonthChange, onBillClick }: {
+function CalendarView({ bills, currentMonth, onBillClick }: {
   bills: Bill[];
   currentMonth: Date;
-  onMonthChange: (d: Date) => void;
   onBillClick: (b: Bill) => void;
 }) {
   const year = currentMonth.getFullYear();
@@ -431,26 +420,9 @@ function CalendarView({ bills, currentMonth, onMonthChange, onBillClick }: {
     return "bg-(--color-accent)/15 text-(--color-accent) border border-(--color-accent)/30";
   }
 
-  const monthLabel = currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Month nav */}
-      <div className="flex items-center justify-between mb-2 shrink-0">
-        <button
-          onClick={() => onMonthChange(new Date(year, month - 1, 1))}
-          className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors p-1"
-        >
-          <ChevronLeft size={13} />
-        </button>
-        <p className="text-[11px] font-medium text-(--color-text-secondary)">{monthLabel}</p>
-        <button
-          onClick={() => onMonthChange(new Date(year, month + 1, 1))}
-          className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors p-1"
-        >
-          <ChevronRight size={13} />
-        </button>
-      </div>
+      {/* Month nav is rendered at widget level above all views */}
 
       {/* Weekday headers */}
       <div className="grid grid-cols-7 mb-1 shrink-0">
@@ -738,18 +710,26 @@ export default function BillsWidget({ accounts }: BillsWidgetProps) {
         </div>
       </div>
 
+      {/* Month navigator — shared across all three views */}
+      {currentMonth && (
+        <div className="mb-2 shrink-0">
+          <MonthNav month={currentMonth} onChange={setCurrentMonth} size="sm" />
+        </div>
+      )}
+
       {/* View content */}
-      {activeView === "grid" && (
+      {activeView === "grid" && currentMonth && (
         <GridView
           bills={bills}
+          currentMonth={currentMonth}
           onMarkPaid={markPaid}
           onMarkUnpaid={markUnpaid}
           onBillClick={b => setSelectedBillId(b.id)}
         />
       )}
-      {activeView === "chart" && <ChartView bills={bills} accounts={accounts} />}
+      {activeView === "chart" && currentMonth && <ChartView bills={bills} accounts={accounts} currentMonth={currentMonth} />}
       {activeView === "calendar" && currentMonth && (
-        <CalendarView bills={bills} currentMonth={currentMonth} onMonthChange={setCurrentMonth} onBillClick={b => setSelectedBillId(b.id)} />
+        <CalendarView bills={bills} currentMonth={currentMonth} onBillClick={b => setSelectedBillId(b.id)} />
       )}
 
       {/* Add form */}

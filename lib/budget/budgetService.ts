@@ -220,13 +220,22 @@ export async function rolloverBudgets(_userId: string): Promise<void> {
   // no-op until Step 5
 }
 
+// ─── resolveCategory ─────────────────────────────────────────────────────────
+// Single source of truth for effective transaction category.
+// override wins over Plaid's primary; null primary maps to "OTHER".
+// R3: nightly-snapshot and weekly-report carry inline copies of this logic
+// (Deno edge functions cannot import from lib/). Keep all three in sync.
+export function resolveCategory(tx: { category_primary: string | null; category_override?: string | null }): string {
+  return tx.category_override ?? tx.category_primary ?? "OTHER";
+}
+
 // ─── matchesBudget ───────────────────────────────────────────────────────────
 // Single filter predicate shared by getBudgetData (spend calc) and
 // getBudgetTransactions (detail list). Ensures the sum on the receipt always
 // equals the spend figure by construction.
 
 export function matchesBudget(
-  tx: { plaid_account_id: string; category_primary: string | null; amount: unknown; date: string },
+  tx: { plaid_account_id: string; category_primary: string | null; category_override?: string | null; amount: unknown; date: string },
   categoryId: string,
   periodStart: string,
   periodEnd: string,
@@ -234,7 +243,7 @@ export function matchesBudget(
 ): boolean {
   return (
     Number(tx.amount) > 0 &&
-    tx.category_primary === categoryId &&
+    resolveCategory(tx) === categoryId &&
     tx.date >= periodStart &&
     tx.date <= periodEnd &&
     linkedAccountIds.has(tx.plaid_account_id)
@@ -276,13 +285,13 @@ export async function getBudgetTransactions(
 
   const { data: txRows } = await db()
     .from("plaid_transactions")
-    .select("id, merchant_name, name, date, amount, plaid_account_id, category_primary")
+    .select("id, merchant_name, name, date, amount, plaid_account_id, category_primary, category_override")
     .eq("user_id", userId)
     .gte("date", periodStart)
     .lte("date", periodEnd)
     .eq("pending", false);
 
-  const matched = (txRows ?? []).filter((tx: { plaid_account_id: string; category_primary: string | null; amount: unknown; date: string }) =>
+  const matched = (txRows ?? []).filter((tx: { plaid_account_id: string; category_primary: string | null; category_override?: string | null; amount: unknown; date: string }) =>
     matchesBudget(tx, budget.category_id, periodStart, periodEnd, linkedAccountIds)
   );
 
@@ -351,7 +360,7 @@ export async function getBudgetData(
   const [txRes, snapshotResults] = await Promise.all([
     db()
       .from("plaid_transactions")
-      .select("plaid_account_id, category_primary, amount, date")
+      .select("plaid_account_id, category_primary, category_override, amount, date")
       .eq("user_id", userId)
       .gte("date", queryStart)
       .lte("date", queryEnd)

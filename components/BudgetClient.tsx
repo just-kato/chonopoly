@@ -400,6 +400,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
   const [accountFilter, setAccountFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc" | "merchant-asc">("date-desc");
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+  const [pickerOpenForTxId, setPickerOpenForTxId] = useState<string | null>(null);
   const [showMoreCategories, setShowMoreCategories] = useState(false);
 
   // Reset to page 1 whenever any filter or page-size changes — intersection of all three filters
@@ -675,7 +676,13 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
 
               {/* Category */}
               <div className="w-40 shrink-0 pr-3 max-lg:hidden">
-                <CategoryPill category={effectiveCategory} transactionId={tx.transaction_id} onChangeCategory={onChangeCategory} />
+                <CategoryPill
+                  category={effectiveCategory}
+                  transactionId={tx.transaction_id}
+                  onChangeCategory={onChangeCategory}
+                  forceOpen={pickerOpenForTxId === tx.transaction_id}
+                  onPickerClose={() => setPickerOpenForTxId(null)}
+                />
               </div>
 
               {/* Date */}
@@ -709,16 +716,10 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
                     onMouseDown={e => e.stopPropagation()}
                   >
                     <button
-                      onClick={() => { onChangeCategory(tx.transaction_id, effectiveCategory ?? "OTHER"); setOpenActionsId(null); }}
+                      onClick={() => { setPickerOpenForTxId(tx.transaction_id); setOpenActionsId(null); }}
                       className="w-full text-left px-3 py-2 text-[12px] text-(--color-text-primary) hover:bg-(--color-elevated) transition-colors"
                     >
                       Change category
-                    </button>
-                    <button
-                      onClick={() => setOpenActionsId(null)}
-                      className="w-full text-left px-3 py-2 text-[12px] text-(--color-text-primary) hover:bg-(--color-elevated) transition-colors"
-                    >
-                      View details
                     </button>
                   </div>
                 )}
@@ -1785,8 +1786,8 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const [teamWizardOpen, setTeamWizardOpen] = useState(false);
   const [goals, setGoals] = useState<GoalSummary[]>([]);
 
-  // Manage tab sub-navigation: status (default) → all (ManagePanel) or drilldown
-  type ManageSubView = "status" | "all" | "drilldown";
+  // Manage tab sub-navigation: status (default) → all | drilldown | goals | bills
+  type ManageSubView = "status" | "all" | "drilldown" | "goals" | "bills";
   const [manageSubView, setManageSubView] = useState<ManageSubView>("status");
   const [drillDownBudget, setDrillDownBudget] = useState<BudgetSummaryRow | null>(null);
 
@@ -1923,6 +1924,12 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         if (!alive) return;
         setAccounts(d.accounts);
         setTransactions(d.transactions);
+        // Populate persisted overrides so category labels survive a reload
+        const initial: Record<string, string> = {};
+        for (const tx of (d.transactions ?? []) as Array<{ transaction_id: string; category_override: string | null }>) {
+          if (tx.category_override) initial[tx.transaction_id] = tx.category_override;
+        }
+        setCategoryOverrides(initial);
         setLoading(false);
         setError(null);
       })
@@ -1970,8 +1977,23 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const totalSpent   = useMemo(() => transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions]);
   const totalIncome  = useMemo(() => transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0), [transactions]);
 
-  function changeCategory(txId: string, cat: string) {
-    setCategoryOverrides((prev) => ({ ...prev, [txId]: cat }));
+  async function changeCategory(txId: string, cat: string) {
+    const prev = categoryOverrides[txId];
+    // Optimistic update
+    setCategoryOverrides((o) => ({ ...o, [txId]: cat }));
+    const res = await fetch(`/api/transactions/${txId}/category`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: cat }),
+    });
+    if (!res.ok) {
+      // Revert on failure — no toast UI exists in v1
+      setCategoryOverrides((o) => {
+        const next = { ...o };
+        if (prev === undefined) delete next[txId]; else next[txId] = prev;
+        return next;
+      });
+    }
   }
 
   function navTo(v: ViewState) {
@@ -2429,7 +2451,8 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 goals={goals}
                 onManageAll={() => setManageSubView("all")}
                 onBudgetDrillDown={(budget) => { setDrillDownBudget(budget); setManageSubView("drilldown"); }}
-                onGoTo={navTo}
+                onViewAllGoals={() => setManageSubView("goals")}
+                onViewAllBills={() => setManageSubView("bills")}
               />
             )}
             {view === "manage" && manageSubView === "all" && (
@@ -2444,7 +2467,32 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 budgetCreateRef={budgetCreateRef}
                 accounts={accounts}
                 goals={goals}
+                onBack={() => setManageSubView("status")}
               />
+            )}
+            {view === "manage" && manageSubView === "goals" && (
+              <div>
+                <button
+                  onClick={() => setManageSubView("status")}
+                  className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-text-primary) transition-colors px-4 py-3 border-b border-(--color-border-subtle) w-full"
+                >
+                  <ChevronLeft size={15} />
+                  Back
+                </button>
+                <GoalsPanel activeContext={activeContext} contextLabel={contextLabel} onReset={resetToPersonal} />
+              </div>
+            )}
+            {view === "manage" && manageSubView === "bills" && (
+              <div>
+                <button
+                  onClick={() => setManageSubView("status")}
+                  className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-text-primary) transition-colors px-4 py-3 border-b border-(--color-border-subtle) w-full"
+                >
+                  <ChevronLeft size={15} />
+                  Back
+                </button>
+                <BillsPanel accounts={accounts} />
+              </div>
             )}
             {view === "manage" && manageSubView === "drilldown" && drillDownBudget && (
               <BudgetDrillDown

@@ -66,7 +66,9 @@ Deno.serve(async () => {
 
   const { data: txRows } = await db
     .from("plaid_transactions")
-    .select("plaid_account_id, category_primary, amount, date")
+    // R3: category_override ?? category_primary mirrors resolveCategory() in lib/budget/budgetService.ts.
+    // Keep this inline resolver and the one in weekly-report/index.ts in sync with that function.
+    .select("plaid_account_id, category_primary, category_override, amount, date")
     .in("plaid_account_id", allLinkedAccountIds)
     .gte("date", queryStart)
     .lte("date", today)
@@ -120,7 +122,8 @@ Deno.serve(async () => {
 
     const amountSpent = allTx
       .filter(tx =>
-        tx.category_primary === budget.category_id &&
+        // R3: override-first resolver — mirrors resolveCategory() in lib/budget/budgetService.ts
+        (tx.category_override ?? tx.category_primary) === budget.category_id &&
         tx.date >= budget.period_start &&
         tx.date <= today &&
         linkedAccounts.has(tx.plaid_account_id)

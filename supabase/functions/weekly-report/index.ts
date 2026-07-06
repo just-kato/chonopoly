@@ -21,11 +21,11 @@ function fmtDate(d: Date) {
 }
 
 // R3: This predicate is duplicated from lib/budget/budgetService.ts matchesBudget.
-// Deno edge functions cannot import from lib/. If you change the filter logic,
-// update BOTH this copy and the one in budgetService.ts or weekly-report spend
-// totals will disagree with what the budget UI shows.
+// Deno edge functions cannot import from lib/. Keep this copy, the one in
+// nightly-snapshot/index.ts, and the source in budgetService.ts in sync.
+// Now uses override-first resolution matching resolveCategory() in budgetService.ts.
 function matchesBudget(
-  tx: { plaid_account_id: string; category_primary: string | null; amount: number; date: string },
+  tx: { plaid_account_id: string; category_primary: string | null; category_override?: string | null; amount: number; date: string },
   categoryId: string,
   periodStart: string,
   periodEnd: string,
@@ -33,7 +33,7 @@ function matchesBudget(
 ): boolean {
   return (
     tx.amount > 0 &&
-    tx.category_primary === categoryId &&
+    (tx.category_override ?? tx.category_primary) === categoryId &&
     tx.date >= periodStart &&
     tx.date <= periodEnd &&
     linkedAccountIds.has(tx.plaid_account_id)
@@ -75,6 +75,7 @@ type BudgetRow = {
 type TxRow = {
   plaid_account_id: string;
   category_primary: string | null;
+  category_override: string | null;
   amount: number;
   date: string;
   merchant_name: string | null;
@@ -270,7 +271,8 @@ Deno.serve(async () => {
     // Transactions covering the closed week (plus prior week for delta)
     const { data: txs } = await db
       .from("plaid_transactions")
-      .select("plaid_account_id, category_primary, amount, date, merchant_name")
+      // R3: category_override fetched here — mirrors resolveCategory() in lib/budget/budgetService.ts
+      .select("plaid_account_id, category_primary, category_override, amount, date, merchant_name")
       .in("plaid_account_id", allAccountIds)
       .gte("date", prior.weekStart)
       .lte("date", weekEnd)

@@ -22,6 +22,7 @@ export interface Transaction {
   date: string;
   personal_finance_category: { primary: string; detailed: string } | null;
   logo_url: string | null;
+  category_override: string | null;
 }
 
 export type ViewState =

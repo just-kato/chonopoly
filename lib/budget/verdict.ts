@@ -49,30 +49,60 @@ export function budgetRowStatus(row: BudgetSummaryRow): BudgetStatus {
 
 export type Verdict = "ok" | "attention" | "critical";
 
+export interface VerdictResult {
+  verdict: Verdict;
+  label: string | null;
+}
+
 // Overall verdict for the status banner.
-// "critical" = any budget over limit (B4: banner escalates on overdue only — over-budget is overdue spend).
-// "attention" = any bill whose current-cycle due date has passed and is unpaid, subject to containment below.
-// "ok"       = all clear.
-export function computeVerdict(budgets: BudgetSummaryRow[], bills: Bill[], today: Date): Verdict {
-  if (budgets.some(b => b.over_budget)) return "critical";
+// Priority: (1) over-limit budget → "critical"; (2) overdue bill → "attention";
+// (3) over-pace budget → "attention"; (4) all clear → "ok".
+// Containment for known schema limitations:
+//   one-time bills: excluded (rolling monthly semantics — appears perpetually overdue).
+//   yearly bills: capped at 30 days past current-cycle due date.
+export function computeVerdict(budgets: BudgetSummaryRow[], bills: Bill[], today: Date): VerdictResult {
+  // 1. Over-limit
+  const overBudgets = budgets.filter(b => b.over_budget || b.percent_used >= 100);
+  if (overBudgets.length > 0) {
+    const worst = overBudgets.reduce((a, b) => b.percent_used > a.percent_used ? b : a);
+    return { verdict: "critical", label: `${worst.name ?? worst.category_name} is over limit` };
+  }
+
+  // 2. Overdue bills
   const t = utcMidnight(today);
-  const hasOverdueBill = bills.some(bill => {
+  const overdueBill = bills.find(bill => {
     if (isPaidThisCycle(bill)) return false;
     const { current } = cycleDueDates(bill, today);
-    if (current >= t) return false; // not yet past due this cycle
-
-    // Containment for known schema limitations — real fix is a due_date schema change (parked).
-    // "one-time": due_day rolls to the current month each month, so the bill appears perpetually
-    //   overdue after its first due_day passes. Exclude from banner; row-level styling still fires.
+    if (current >= t) return false;
     if (bill.recurrence === "one-time") return false;
-    // "yearly": due_day encodes day-of-January only, so the bill stays "past due" for ~11 months.
-    //   Cap banner escalation at 30 days after the current-cycle due date.
     if (bill.recurrence === "yearly") {
       return (t.getTime() - current.getTime()) / 86_400_000 <= 30;
     }
-    // monthly and weekly: genuinely new obligations each cycle — escalate uncapped.
     return true;
   });
-  if (hasOverdueBill) return "attention";
-  return "ok";
+  if (overdueBill) {
+    return { verdict: "attention", label: `${overdueBill.name} is overdue` };
+  }
+
+  // 3. Over-pace: spend fraction exceeds elapsed time fraction.
+  // Only meaningful when elapsed > 0 (period has started).
+  // Worst offender = highest (spentFrac / elapsed) ratio.
+  let worstPaceBudget: BudgetSummaryRow | null = null;
+  let worstPaceRatio = 1;
+  for (const b of budgets) {
+    const elapsed = calcElapsedFraction(b, today);
+    if (elapsed <= 0 || b.effective_limit <= 0) continue;
+    const spentFrac = b.amount_spent / b.effective_limit;
+    if (spentFrac <= elapsed) continue;
+    const ratio = spentFrac / elapsed;
+    if (ratio > worstPaceRatio) {
+      worstPaceRatio = ratio;
+      worstPaceBudget = b;
+    }
+  }
+  if (worstPaceBudget) {
+    return { verdict: "attention", label: `${worstPaceBudget.name ?? worstPaceBudget.category_name} is over pace` };
+  }
+
+  return { verdict: "ok", label: null };
 }

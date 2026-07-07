@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, Wallet, CalendarClock, Target, CreditCard, Building2, LayoutGrid, LayoutList } from "lucide-react";
+import { ChevronLeft, Plus, Wallet, CalendarClock, Target, CreditCard, Building2, LayoutGrid, LayoutList } from "lucide-react";
 import { ActiveContext } from "@/lib/goals/types";
 import { ViewState } from "./types";
 import GoalsPanel, { type GoalsPanelHandle } from "@/components/GoalsPanel";
@@ -44,6 +44,8 @@ interface ManagePanelProps {
   accounts?: Account[];
   /** Threaded from BudgetClient top-level goals fetch; passed to BudgetTableView */
   goals: { id: string; name: string; icon: string }[];
+  /** When provided, renders a back affordance above the panel (Status → Manage all path). */
+  onBack?: () => void;
 }
 
 // ─── Section metadata ─────────────────────────────────────────────────────────
@@ -99,6 +101,7 @@ export default function ManagePanel({
   budgetCreateRef,
   accounts,
   goals,
+  onBack,
 }: ManagePanelProps) {
   const [activeSection, setActiveSection] = useState<Section>("budgets");
 
@@ -154,7 +157,17 @@ export default function ManagePanel({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row overflow-hidden lg:h-[calc(100vh-56px)]">
+    <>
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-text-primary) transition-colors px-4 py-3 border-b border-(--color-border-subtle) w-full"
+        >
+          <ChevronLeft size={15} />
+          Back
+        </button>
+      )}
+      <div className="flex flex-col lg:flex-row overflow-hidden lg:h-[calc(100vh-56px)]">
 
       {/* ── Mobile pill strip — hidden on desktop ── */}
       <nav
@@ -303,5 +316,6 @@ export default function ManagePanel({
         )}
       </div>
     </div>
+    </>
   );
 }

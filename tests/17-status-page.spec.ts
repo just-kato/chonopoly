@@ -123,6 +123,13 @@ async function stubStatusPage(
       body: JSON.stringify({ goals: opts.goals ?? [MOCK_GOAL] }),
     })
   );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ net_worth: 42000 }),
+    })
+  );
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -155,7 +162,7 @@ test.describe("Manage tab — StatusPage", () => {
     await stubStatusPage(page, { budgets: [MOCK_BUDGET_ONTRACK], bills: [] });
     await page.goto("/finances?tab=manage");
 
-    await expect(page.getByTestId("verdict-banner")).toContainText("on track");
+    await expect(page.getByTestId("verdict-banner")).toContainText("On track");
   });
 
   test("bills-week-row shows unpaid count for current week", async ({ page }) => {
@@ -167,18 +174,28 @@ test.describe("Manage tab — StatusPage", () => {
     await expect(billsRow).toContainText("1 unpaid bill");
   });
 
-  test("'Manage all' button navigates to ManagePanel", async ({ page }) => {
+  test("'Manage all' bottom row navigates to ManagePanel", async ({ page }) => {
     await stubStatusPage(page);
     await page.goto("/finances?tab=manage");
 
     await page.getByTestId("manage-all-btn").click();
-    // ManagePanel has section nav buttons; verify we left StatusPage
+    // ManagePanel is visible, StatusPage is not
     await expect(page.getByTestId("status-page")).not.toBeVisible();
+  });
+
+  test("back from ManagePanel returns to StatusPage", async ({ page }) => {
+    await stubStatusPage(page);
+    await page.goto("/finances?tab=manage");
+
+    await page.getByTestId("manage-all-btn").click();
+    await expect(page.getByTestId("status-page")).not.toBeVisible();
+
+    await page.getByRole("button", { name: /^Back$/i }).first().click();
+    await expect(page.getByTestId("status-page")).toBeVisible();
   });
 
   test("clicking a budget row opens drilldown", async ({ page }) => {
     await stubStatusPage(page);
-    // Stub drilldown data endpoints
     await page.route("**/api/budget/transactions**", route =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ transactions: [] }) })
     );
@@ -191,7 +208,6 @@ test.describe("Manage tab — StatusPage", () => {
     await page.goto("/finances?tab=manage");
 
     await page.getByTestId("status-budget-row-bud-1").click();
-    // DrillDown renders a back button
     await expect(page.getByTestId("status-page")).not.toBeVisible();
   });
 
@@ -209,8 +225,50 @@ test.describe("Manage tab — StatusPage", () => {
     await page.goto("/finances?tab=manage");
 
     await page.getByTestId("status-budget-row-bud-1").click();
-    // DrillDown has a back button (ChevronLeft with "Back" text or similar)
-    await page.getByRole("button", { name: /back/i }).first().click();
+    await page.getByRole("button", { name: /^Back$/i }).first().click();
+    await expect(page.getByTestId("status-page")).toBeVisible();
+  });
+
+  test("'View all goals' opens goals sub-view with back affordance", async ({ page }) => {
+    await stubStatusPage(page, { goals: [MOCK_GOAL] });
+    await page.route("**/api/goals**", route =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [MOCK_GOAL] }) })
+    );
+    await page.goto("/finances?tab=manage");
+
+    await page.getByTestId("view-all-goals-btn").click();
+    await expect(page.getByTestId("status-page")).not.toBeVisible();
+    // Back button is present
+    await expect(page.getByRole("button", { name: /^Back$/i }).first()).toBeVisible();
+  });
+
+  test("back from goals sub-view returns to StatusPage", async ({ page }) => {
+    await stubStatusPage(page, { goals: [MOCK_GOAL] });
+    await page.route("**/api/goals**", route =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [MOCK_GOAL] }) })
+    );
+    await page.goto("/finances?tab=manage");
+
+    await page.getByTestId("view-all-goals-btn").click();
+    await page.getByRole("button", { name: /^Back$/i }).first().click();
+    await expect(page.getByTestId("status-page")).toBeVisible();
+  });
+
+  test("bills row opens bills sub-view with back affordance", async ({ page }) => {
+    await stubStatusPage(page);
+    await page.goto("/finances?tab=manage");
+
+    await page.getByTestId("bills-week-row").click();
+    await expect(page.getByTestId("status-page")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /^Back$/i }).first()).toBeVisible();
+  });
+
+  test("back from bills sub-view returns to StatusPage", async ({ page }) => {
+    await stubStatusPage(page);
+    await page.goto("/finances?tab=manage");
+
+    await page.getByTestId("bills-week-row").click();
+    await page.getByRole("button", { name: /^Back$/i }).first().click();
     await expect(page.getByTestId("status-page")).toBeVisible();
   });
 

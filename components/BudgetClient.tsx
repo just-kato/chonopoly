@@ -36,6 +36,7 @@ import OnboardingChecklist from "./OnboardingChecklist";
 import BudgetDrillDown from "./budget/BudgetDrillDown";
 import StatusPage from "./budget/StatusPage";
 import CategoryPill from "./budget/CategoryPill";
+import CategoryPickerModal from "./budget/CategoryPickerModal";
 import { StatCard } from "./budget/StatCard";
 import DailyDigest from "./budget/DailyDigest";
 import {
@@ -672,6 +673,8 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
               {/* Merchant */}
               <div className="flex-1 min-w-0 pr-3">
                 <p className="text-[13px] font-medium text-(--color-text-primary) truncate">{tx.merchant_name ?? tx.name}</p>
+                {/* E4: compact category indicator — mobile only, same effectiveCategory logic as filter tabs */}
+                <p className="text-[10px] text-(--color-text-tertiary) truncate lg:hidden">{meta.label}</p>
               </div>
 
               {/* Category */}
@@ -680,8 +683,6 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
                   category={effectiveCategory}
                   transactionId={tx.transaction_id}
                   onChangeCategory={onChangeCategory}
-                  forceOpen={pickerOpenForTxId === tx.transaction_id}
-                  onPickerClose={() => setPickerOpenForTxId(null)}
                 />
               </div>
 
@@ -706,7 +707,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
               <div className="w-10 shrink-0 flex items-center justify-center relative">
                 <button
                   onClick={e => { e.stopPropagation(); setOpenActionsId(prev => prev === tx.transaction_id ? null : tx.transaction_id); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-(--color-text-tertiary) hover:text-(--color-text-primary) p-1 rounded"
+                  className="opacity-0 group-hover:opacity-100 max-lg:opacity-100 transition-opacity text-(--color-text-tertiary) hover:text-(--color-text-primary) p-1 rounded"
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -716,7 +717,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
                     onMouseDown={e => e.stopPropagation()}
                   >
                     <button
-                      onClick={() => { setPickerOpenForTxId(tx.transaction_id); setOpenActionsId(null); }}
+                      onMouseDown={() => { setPickerOpenForTxId(tx.transaction_id); setOpenActionsId(null); }}
                       className="w-full text-left px-3 py-2 text-[12px] text-(--color-text-primary) hover:bg-(--color-elevated) transition-colors"
                     >
                       Change category
@@ -728,6 +729,22 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
           );
         })}
       </div>
+
+      {/* ── Category picker modal — all widths. Row menu "Change category" at any viewport. ── */}
+      {/* onMouseDown on the button fires before the mousedown-close handler removes it from the DOM. */}
+      {/* All modal close paths (backdrop, Escape, selection) call onClose → clears pickerOpenForTxId. */}
+      {pickerOpenForTxId !== null && (() => {
+        const pickerTx = transactions.find(t => t.transaction_id === pickerOpenForTxId);
+        const pickerCategory = categoryOverrides[pickerOpenForTxId] ?? pickerTx?.personal_finance_category?.primary;
+        return (
+          <CategoryPickerModal
+            transactionId={pickerOpenForTxId}
+            currentCategory={pickerCategory}
+            onSelect={onChangeCategory}
+            onClose={() => setPickerOpenForTxId(null)}
+          />
+        );
+      })()}
 
       {/* ── Pagination ──────────────────────────────────────────────────── */}
       {filteredTransactions.length > 0 && (

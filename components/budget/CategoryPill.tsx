@@ -7,29 +7,20 @@ interface Props {
   category: string | undefined;
   transactionId: string;
   onChangeCategory: (transactionId: string, newCategory: string) => void;
-  // When true, programmatically opens the picker (used by row menu "Change category").
-  // Parent must pass onPickerClose to clear this flag on every close path.
-  forceOpen?: boolean;
-  onPickerClose?: () => void;
 }
 
-export default function CategoryPill({ category, transactionId, onChangeCategory, forceOpen, onPickerClose }: Props) {
+export default function CategoryPill({ category, transactionId, onChangeCategory }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const meta = getCategoryMeta(category);
 
-  // D4: three close paths — click-outside, Escape, and selection.
-  // All three call onPickerClose so pickerOpenForTxId is always cleared.
   useEffect(() => {
     if (!open) return;
     function onMouseDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onPickerClose?.();
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") { setOpen(false); onPickerClose?.(); }
+      if (e.key === "Escape") setOpen(false);
     }
     document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("keydown", onKeyDown);
@@ -37,12 +28,7 @@ export default function CategoryPill({ category, transactionId, onChangeCategory
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onPickerClose]);
-
-  // Open when the row menu "Change category" sets forceOpen=true
-  useEffect(() => {
-    if (forceOpen) setOpen(true);
-  }, [forceOpen]);
+  }, [open]);
 
   return (
     <div ref={ref} className="relative inline-block">
@@ -62,7 +48,6 @@ export default function CategoryPill({ category, transactionId, onChangeCategory
               onClick={() => {
                 onChangeCategory(transactionId, key);
                 setOpen(false);
-                onPickerClose?.();
               }}
               className={`w-full text-left px-3 py-2 text-xs hover:bg-[#2e2e38] transition-colors flex items-center gap-2 ${key === category ? "opacity-100" : "opacity-60 hover:opacity-100"}`}
             >

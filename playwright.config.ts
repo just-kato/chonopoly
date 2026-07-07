@@ -1,4 +1,20 @@
 import { defineConfig } from "@playwright/test";
+import fs from "fs";
+import path from "path";
+
+// Load .env.local so TEST_EMAIL/TEST_PASSWORD reach global-setup (dotenv not installed)
+const envLocalPath = path.join(__dirname, ".env.local");
+if (fs.existsSync(envLocalPath)) {
+  for (const line of fs.readFileSync(envLocalPath, "utf-8").split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq === -1) continue;
+    const key = t.slice(0, eq).trim();
+    const val = t.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+    if (!(key in process.env)) process.env[key] = val;
+  }
+}
 
 export default defineConfig({
   testDir: "./tests",

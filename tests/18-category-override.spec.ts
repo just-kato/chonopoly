@@ -29,13 +29,13 @@ const MOCK_TX_ORIGINAL = {
   logo_url: null,
 };
 
-// Same transaction after override has been saved
+// Same transaction after override saved (GENERAL_MERCHANDISE → display label "Shopping")
 const MOCK_TX_OVERRIDDEN = {
   ...MOCK_TX_ORIGINAL,
   category_override: "GENERAL_MERCHANDISE",
 };
 
-const MOCK_TRANSACTIONS_ORIGINAL = { transactions: [MOCK_TX_ORIGINAL], accounts: [MOCK_ACCOUNT] };
+const MOCK_TRANSACTIONS_ORIGINAL   = { transactions: [MOCK_TX_ORIGINAL],   accounts: [MOCK_ACCOUNT] };
 const MOCK_TRANSACTIONS_OVERRIDDEN = { transactions: [MOCK_TX_OVERRIDDEN], accounts: [MOCK_ACCOUNT] };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -58,22 +58,21 @@ async function goToTransactions(
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
   );
   await page.goto("/finances?tab=transactions");
-  // Wait for transactions tab to render
   await page.waitForSelector("text=Whole Foods Market", { timeout: 8000 });
 }
 
-// ─── Test 1: CategoryPill override persists across reload ────────────────────
+// ─── Test 1: CategoryPill direct-click override persists across reload ────────
+// Desktop path: click the pill → inline dropdown → pick.
+// GENERAL_MERCHANDISE displays as "Shopping" per CATEGORY_META.
 
 test("category override persists across page reload", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
 
   await goToTransactions(page);
 
-  // The transaction starts as FOOD_AND_DRINK
   const initialPill = page.locator('[title="Click to change category"]').first();
   await expect(initialPill).toContainText("Food & Drink");
 
-  // Intercept the PATCH — confirm it fires with the new category
   let patchBody: Record<string, unknown> = {};
   await page.route("**/api/transactions/tx-cat-override-1/category**", async route => {
     const req = route.request();
@@ -81,18 +80,15 @@ test("category override persists across page reload", async ({ page }) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
   });
 
-  // Click the CategoryPill to open picker
+  // Direct-click on the pill opens the inline dropdown (.rounded-xl)
   await initialPill.click();
-  // Select "General Merchandise"
-  await page.locator('[data-testid="category-picker"], .rounded-xl').filter({ hasText: "General Merch" }).locator('button', { hasText: "General Merch" }).first().click();
+  await page.locator(".rounded-xl button").filter({ hasText: "Shopping" }).first().click();
 
-  // Optimistic update: pill should show the new category immediately
-  await expect(initialPill).toContainText("General Merch", { timeout: 3000 });
-
-  // PATCH was sent with correct payload
+  // Optimistic update
+  await expect(initialPill).toContainText("Shopping", { timeout: 3000 });
   expect(patchBody.category).toBe("GENERAL_MERCHANDISE");
 
-  // ── Reload: GET returns transaction with override already set ──────────────
+  // Reload with override already in the response
   await page.unroute("**/api/plaid/transactions**");
   await page.route("**/api/plaid/transactions**", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_TRANSACTIONS_OVERRIDDEN) })
@@ -101,14 +97,16 @@ test("category override persists across page reload", async ({ page }) => {
   await page.reload();
   await page.waitForSelector("text=Whole Foods Market", { timeout: 8000 });
 
-  // Label must survive the reload — loaded from category_override in GET response
   const reloadedPill = page.locator('[title="Click to change category"]').first();
-  await expect(reloadedPill).toContainText("General Merch");
+  await expect(reloadedPill).toContainText("Shopping");
 });
 
-// ─── Test 2: Row menu "Change category" opens CategoryPill picker ─────────────
+// ─── Test 2: Row menu "Change category" opens CategoryPickerModal ─────────────
+// Row-menu path opens CategoryPickerModal at ALL viewport widths (no lg:hidden).
+// Root cause fix: button uses onMouseDown so the handler fires before the
+// document mousedown listener removes the button from the DOM.
 
-test("row menu Change category opens the category picker", async ({ page }) => {
+test("row menu Change category opens CategoryPickerModal", async ({ page }) => {
   if (!process.env.TEST_EMAIL) test.skip();
 
   await goToTransactions(page);
@@ -117,19 +115,15 @@ test("row menu Change category opens the category picker", async ({ page }) => {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) })
   );
 
-  // Hover the row to reveal the MoreHorizontal actions button
-  const row = page.locator("div").filter({ hasText: /Whole Foods Market/ }).first();
-  await row.hover();
-
-  // Open the row actions menu
-  await row.locator("button").filter({ has: page.locator("svg") }).last().click();
+  const firstRow = page.locator('[style*="height: 52"]').first();
+  await firstRow.hover();
+  await firstRow.locator("button").last().click();
   await expect(page.getByRole("button", { name: /change category/i })).toBeVisible();
 
-  // Click "Change category" — should open the CategoryPill dropdown, NOT call PATCH directly
   await page.getByRole("button", { name: /change category/i }).click();
 
-  // The picker dropdown should be visible (contains category options)
-  await expect(page.locator(".rounded-xl").filter({ hasText: "Food & Drink" }).first()).toBeVisible();
+  // Modal visible at all widths (lg:hidden removed)
+  await expect(page.locator('[data-testid="category-picker-modal"]')).toBeVisible({ timeout: 3000 });
 });
 
 // ─── Test 3: PATCH failure reverts optimistic update ─────────────────────────
@@ -139,16 +133,63 @@ test("PATCH failure reverts category label", async ({ page }) => {
 
   await goToTransactions(page);
 
-  // Make the PATCH fail
   await page.route("**/api/transactions/tx-cat-override-1/category**", route =>
     route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Server error" }) })
   );
 
-  // Optimistically change the category
   const pill = page.locator('[title="Click to change category"]').first();
   await pill.click();
-  await page.locator(".rounded-xl button").filter({ hasText: "General Merch" }).first().click();
+  await page.locator(".rounded-xl button").filter({ hasText: "Shopping" }).first().click();
 
-  // After PATCH failure, the label should revert back to Food & Drink
   await expect(pill).toContainText("Food & Drink", { timeout: 3000 });
+});
+
+// ─── Test 4: Mobile 390px — row menu opens CategoryPickerModal ───────────────
+
+test("mobile 390px: row menu opens CategoryPickerModal, pick persists", async ({ page }) => {
+  if (!process.env.TEST_EMAIL) test.skip();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await goToTransactions(page);
+
+  let patchBody: Record<string, unknown> = {};
+  await page.route("**/api/transactions/tx-cat-override-1/category**", async route => {
+    try { patchBody = await route.request().postDataJSON(); } catch { /* ignore */ }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+  });
+
+  // ⋯ button always visible at mobile (max-lg:opacity-100)
+  const rows = page.locator('[style*="height: 52"]');
+  await rows.first().locator("button").last().click();
+
+  const changeCatBtn = page.getByRole("button", { name: /change category/i });
+  await expect(changeCatBtn).toBeVisible();
+  await changeCatBtn.click();
+
+  // Modal visible (no lg:hidden)
+  const modal = page.locator('[data-testid="category-picker-modal"]');
+  await expect(modal).toBeVisible({ timeout: 3000 });
+
+  // CategoryPill column is max-lg:hidden at 390px — not in layout
+  await expect(page.locator('[title="Click to change category"]').first()).not.toBeVisible();
+
+  // Pick from modal
+  await modal.locator("button").filter({ hasText: "Shopping" }).first().click();
+
+  await expect(modal).not.toBeVisible({ timeout: 2000 });
+  expect(patchBody.category).toBe("GENERAL_MERCHANDISE");
+
+  // Mobile sub-label under merchant name updated
+  await expect(page.locator("p.lg\\:hidden").first()).toContainText("Shopping");
+
+  // Reload with override in GET response
+  await page.unroute("**/api/plaid/transactions**");
+  await page.route("**/api/plaid/transactions**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_TRANSACTIONS_OVERRIDDEN) })
+  );
+
+  await page.reload();
+  await page.waitForSelector("text=Whole Foods Market", { timeout: 8000 });
+
+  await expect(page.locator("p.lg\\:hidden").first()).toContainText("Shopping");
 });

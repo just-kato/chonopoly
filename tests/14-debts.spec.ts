@@ -46,8 +46,18 @@ async function goToDebts(
   await page.route("**/api/debts/summary**", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ debts }) })
   );
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
+  await page.route("**/api/bills**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
+  );
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /debts/i }).click();
 }
 
@@ -87,8 +97,16 @@ test("wizard creates a debt", async ({ page }) => {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
   );
 
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
+
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /debts/i }).click();
   await page.getByTestId("add-first-debt-btn").click();
 

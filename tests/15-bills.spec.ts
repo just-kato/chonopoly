@@ -67,8 +67,15 @@ async function goToBills(
   await page.route("**/api/plaid/transactions**", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ transactions: [], accounts: [] }) })
   );
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /bills/i }).click();
 }
 
@@ -144,8 +151,16 @@ test("mark paid sends correct request", async ({ page }) => {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ transactions: [], accounts: [] }) })
   );
 
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
+
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /bills/i }).click();
 
   // Hover the Netflix row to reveal "Mark paid" button

@@ -29,7 +29,22 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-  # ── 2. Run Playwright E2E suite ────────────────────────────────────────────
+  # ── 2. Run Jest unit tests (pure logic, no browser, no Supabase) ──────────
+  jest:
+    name: Jest Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run test:unit
+
+  # ── 3. Run Playwright E2E suite ────────────────────────────────────────────
   playwright:
     name: Playwright E2E
     runs-on: ubuntu-latest

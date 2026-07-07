@@ -102,8 +102,18 @@ async function goToGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
   await page.route("**/api/goals/summary**", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [MOCK_GOAL] }) })
   );
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
+  await page.route("**/api/bills**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
+  );
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("Emergency Fund").filter({ visible: true })).toBeVisible();
 }

@@ -18,6 +18,7 @@ if (fs.existsSync(envLocalPath)) {
 
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: "**/unit/**",
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   workers: 1,

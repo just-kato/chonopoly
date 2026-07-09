@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   const activeItemIds = items.filter(i => !i.access_token.startsWith('access-sandbox-')).map(i => i.item_id);
   const { data: txRows } = await db
     .from("plaid_transactions")
-    .select("plaid_transaction_id, plaid_account_id, merchant_name, amount, date, category_primary, category_detailed, pending, currency_code")
+    .select("plaid_transaction_id, plaid_account_id, merchant_name, amount, date, category_primary, category_detailed, category_override, pending, currency_code")
     .eq("user_id", user.id)
     .in("plaid_item_id", activeItemIds)
     .gte("date", startDate)
@@ -55,6 +55,7 @@ export async function GET(request: Request) {
     personal_finance_category: tx.category_primary
       ? { primary: tx.category_primary, detailed: tx.category_detailed ?? tx.category_primary }
       : null,
+    category_override: tx.category_override ?? null,
   }));
 
   const live = url.searchParams.get('live') === 'true';

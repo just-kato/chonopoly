@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { formatMoney } from "./types";
 import { StatCard } from "./StatCard";
@@ -9,6 +9,7 @@ import { StatCard } from "./StatCard";
 
 interface BudgetRow {
   budget_id: string;
+  goal_id?: string;
   name: string | null;
   category_name: string;
   category_color: string;
@@ -23,6 +24,7 @@ interface BudgetRow {
 
 interface Props {
   onEdit: () => void;
+  goals: { id: string; name: string; icon: string }[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,10 +95,15 @@ function ActionsDropdown({ onPause, onDelete, onEdit, isPaused }: {
 
 // ─── BudgetTableView ──────────────────────────────────────────────────────────
 
-export default function BudgetTableView({ onEdit }: Props) {
+export default function BudgetTableView({ onEdit, goals }: Props) {
   const [rows, setRows] = useState<BudgetRow[]>([]);
   const [totals, setTotals] = useState<{ total_budgeted: number; total_spent: number; monthly_income: number } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const goalNameMap = useMemo(
+    () => new Map(goals.map(g => [g.id, { name: g.name, icon: g.icon }])),
+    [goals]
+  );
 
   const load = useCallback(async () => {
     const res = await fetch("/api/budget/summary");
@@ -163,7 +170,7 @@ export default function BudgetTableView({ onEdit }: Props) {
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            {["Category", "Period", "Progress", "Spent", "Limit", "Daily Rate", "Status", ""].map(h => (
+            {["Category", "Goal", "Period", "Progress", "Spent", "Limit", "Daily Rate", "Status", ""].map(h => (
               <th
                 key={h}
               className="text-[10px] uppercase tracking-[0.08em] text-(--color-text-secondary) border-b border-(--color-border-default) sticky top-0 bg-(--color-base) z-10 py-2 px-3 text-left font-medium"
@@ -182,6 +189,16 @@ export default function BudgetTableView({ onEdit }: Props) {
                 <div className="w-5 h-5 rounded-full shrink-0" style={{ background: r.category_color }} />
                 <span className="text-[13px] text-(--color-text-primary)">{r.name ?? r.category_name}</span>
               </div>
+            </td>
+            {/* Goal */}
+            <td className="px-3 py-2">
+              {r.goal_id && goalNameMap.has(r.goal_id) ? (
+                <span className="text-[12px] text-(--color-text-secondary)">
+                  {goalNameMap.get(r.goal_id)!.icon} {goalNameMap.get(r.goal_id)!.name}
+                </span>
+              ) : (
+                <span className="text-[11px] text-(--color-text-disabled)">—</span>
+              )}
             </td>
             {/* Period */}
             <td className="px-3 py-2" style={{ width: 80 }}>

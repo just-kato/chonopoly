@@ -7,7 +7,7 @@ import { usePlaidLink } from "react-plaid-link";
 import Link from "next/link";
 import {
   LayoutDashboard, LayoutGrid, PieChart, Plus, RefreshCw, Trash2,
-  ChevronDown, ChevronRight, ChevronLeft, Search, ArrowLeft, Wallet,
+  ChevronDown, ChevronRight, ChevronLeft, Search, Wallet,
   ShoppingBag, Plane, UtensilsCrossed, Car, House, HeartPulse,
   Sparkles, Zap, Wrench, TrendingUp, Banknote, Building2, Film,
   CircleDot, ArrowDownLeft, ArrowUpRight, Pencil, Mail, Pause, Play, Target, User, Check, Users, RotateCcw, CreditCard, Settings2, CalendarClock, MoreHorizontal, Receipt, type LucideIcon,
@@ -22,6 +22,8 @@ const ActivityChart = dynamic(() => import("./budget/ActivityChart"), { ssr: fal
 const BillsWidget = dynamic(() => import("./bills/BillsWidget"), { ssr: false });
 const BillsPanel = dynamic(() => import("./bills/BillsPanel"), { ssr: false });
 const TrendCharts = dynamic(() => import("./budget/TrendCharts"), { ssr: false });
+const TeamSetupWizard = dynamic(() => import("./teams/TeamSetupWizard"), { ssr: false });
+import TeamSettingsPanel from "./teams/TeamSettingsPanel";
 import GoalsPanel from "./GoalsPanel";
 import DebtPanel from "./debts/DebtPanel";
 import AssetsSection from "./assets/AssetsSection";
@@ -32,11 +34,13 @@ import BudgetWizard, { EditingBudget, WizardSnapshot } from "./budget/BudgetWiza
 import GoalWizard from "@/components/goals/GoalWizard";
 import OnboardingChecklist from "./OnboardingChecklist";
 import BudgetDrillDown from "./budget/BudgetDrillDown";
+import StatusPage from "./budget/StatusPage";
 import CategoryPill from "./budget/CategoryPill";
+import CategoryPickerModal from "./budget/CategoryPickerModal";
 import { StatCard } from "./budget/StatCard";
 import DailyDigest from "./budget/DailyDigest";
 import {
-  Account, ConnectedItem, Transaction, ViewState,
+  Account, ConnectedItem, Transaction, ViewState, BudgetSummaryRow,
   formatDate, formatMoney, getCategoryMeta, CATEGORY_META,
 } from "./budget/types";
 
@@ -279,15 +283,8 @@ function BudgetHealthMini({ activeContext, onNavigate }: { activeContext: Active
 
 // ─── Goal progress mini widget ────────────────────────────────────────────────
 
-function GoalProgressMini({ activeContext, onNavigate }: { activeContext: ActiveContext; onNavigate: (v: ViewState) => void }) {
-  const [goals, setGoals] = useState<GoalSummary[]>([]);
-
-  useEffect(() => {
-    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
-      .then(r => r.ok ? r.json() : { goals: [] })
-      .then(d => setGoals((d.goals ?? []).filter((g: GoalSummary) => g.status === "active")))
-      .catch(() => {});
-  }, [activeContext.type, activeContext.id]);
+function GoalProgressMini({ goals: allGoals, onNavigate }: { goals: GoalSummary[]; onNavigate: (v: ViewState) => void }) {
+  const goals = allGoals.filter(g => g.status === "active");
 
   const slots = goals.slice(0, 3);
   const placeholders = Math.max(0, 3 - slots.length);
@@ -404,6 +401,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
   const [accountFilter, setAccountFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc" | "merchant-asc">("date-desc");
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+  const [pickerOpenForTxId, setPickerOpenForTxId] = useState<string | null>(null);
   const [showMoreCategories, setShowMoreCategories] = useState(false);
 
   // Reset to page 1 whenever any filter or page-size changes — intersection of all three filters
@@ -675,11 +673,17 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
               {/* Merchant */}
               <div className="flex-1 min-w-0 pr-3">
                 <p className="text-[13px] font-medium text-(--color-text-primary) truncate">{tx.merchant_name ?? tx.name}</p>
+                {/* E4: compact category indicator — mobile only, same effectiveCategory logic as filter tabs */}
+                <p className="text-[10px] text-(--color-text-tertiary) truncate lg:hidden">{meta.label}</p>
               </div>
 
               {/* Category */}
               <div className="w-40 shrink-0 pr-3 max-lg:hidden">
-                <CategoryPill category={effectiveCategory} transactionId={tx.transaction_id} onChangeCategory={onChangeCategory} />
+                <CategoryPill
+                  category={effectiveCategory}
+                  transactionId={tx.transaction_id}
+                  onChangeCategory={onChangeCategory}
+                />
               </div>
 
               {/* Date */}
@@ -703,7 +707,7 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
               <div className="w-10 shrink-0 flex items-center justify-center relative">
                 <button
                   onClick={e => { e.stopPropagation(); setOpenActionsId(prev => prev === tx.transaction_id ? null : tx.transaction_id); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-(--color-text-tertiary) hover:text-(--color-text-primary) p-1 rounded"
+                  className="opacity-0 group-hover:opacity-100 max-lg:opacity-100 transition-opacity text-(--color-text-tertiary) hover:text-(--color-text-primary) p-1 rounded"
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -713,16 +717,10 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
                     onMouseDown={e => e.stopPropagation()}
                   >
                     <button
-                      onClick={() => { onChangeCategory(tx.transaction_id, effectiveCategory ?? "OTHER"); setOpenActionsId(null); }}
+                      onMouseDown={() => { setPickerOpenForTxId(tx.transaction_id); setOpenActionsId(null); }}
                       className="w-full text-left px-3 py-2 text-[12px] text-(--color-text-primary) hover:bg-(--color-elevated) transition-colors"
                     >
                       Change category
-                    </button>
-                    <button
-                      onClick={() => setOpenActionsId(null)}
-                      className="w-full text-left px-3 py-2 text-[12px] text-(--color-text-primary) hover:bg-(--color-elevated) transition-colors"
-                    >
-                      View details
                     </button>
                   </div>
                 )}
@@ -731,6 +729,22 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
           );
         })}
       </div>
+
+      {/* ── Category picker modal — all widths. Row menu "Change category" at any viewport. ── */}
+      {/* onMouseDown on the button fires before the mousedown-close handler removes it from the DOM. */}
+      {/* All modal close paths (backdrop, Escape, selection) call onClose → clears pickerOpenForTxId. */}
+      {pickerOpenForTxId !== null && (() => {
+        const pickerTx = transactions.find(t => t.transaction_id === pickerOpenForTxId);
+        const pickerCategory = categoryOverrides[pickerOpenForTxId] ?? pickerTx?.personal_finance_category?.primary;
+        return (
+          <CategoryPickerModal
+            transactionId={pickerOpenForTxId}
+            currentCategory={pickerCategory}
+            onSelect={onChangeCategory}
+            onClose={() => setPickerOpenForTxId(null)}
+          />
+        );
+      })()}
 
       {/* ── Pagination ──────────────────────────────────────────────────── */}
       {filteredTransactions.length > 0 && (
@@ -777,36 +791,11 @@ function TransactionsPanel({ transactions, accountMap, categoryOverrides, onChan
 
 // ─── Budgets panel ────────────────────────────────────────────────────────────
 
-interface BudgetSummaryRow {
-  budget_id: string;
-  goal_id: string;
-  name: string | null;
-  category_name: string;
-  category_color: string;
-  category_icon: string;
-  total_limit: number;
-  effective_limit: number;
-  amount_spent: number;
-  amount_remaining: number;
-  percent_used: number;
-  over_budget: boolean;
-  period_type: string;
-  period_start: string;
-  period_end: string;
-  days_remaining: number;
-  daily_rate: number;
-  transaction_count: number;
-  notified_80: boolean;
-  notified_over: boolean;
-  nudge_sent: boolean;
-  status: "active" | "paused";
-}
-
-
-function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
+function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext, goals }: {
   onGoTo: (view: ViewState) => void;
   triggerCreateRef?: React.MutableRefObject<(() => void) | null>;
   activeContext: ActiveContext;
+  goals: GoalSummary[];
 }) {
   const [summaries, setSummaries] = useState<BudgetSummaryRow[]>([]);
   const [totals, setTotals] = useState<{ total_budgeted: number; total_spent: number; monthly_income: number } | null>(null);
@@ -820,7 +809,12 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [goalsCount, setGoalsCount] = useState<number | null>(null);
+
+  const goalsCount = goals.length;
+  const goalNameMap = useMemo(
+    () => new Map(goals.map(g => [g.id, { name: g.name, icon: g.icon }])),
+    [goals]
+  );
 
   const loadSummaries = useCallback(async () => {
     const res = await fetch("/api/budget/summary");
@@ -831,13 +825,6 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   }, []);
 
   useEffect(() => { loadSummaries(); }, [loadSummaries]);
-
-  useEffect(() => {
-    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
-      .then(r => r.ok ? r.json() : { goals: [] })
-      .then((d: { goals?: unknown[] }) => setGoalsCount((d.goals ?? []).length))
-      .catch(() => setGoalsCount(0));
-  }, [activeContext.type, activeContext.id]);
 
   async function pauseBudget(budgetId: string, currentStatus: "active" | "paused") {
     await fetch("/api/budget/update", {
@@ -894,7 +881,14 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
   const selectedBudget = selectedBudgetId ? summaries.find(s => s.budget_id === selectedBudgetId) ?? null : null;
 
   if (selectedBudget) {
-    return <BudgetDrillDown budget={selectedBudget} onBack={() => setSelectedBudgetId(null)} />;
+    return (
+      <BudgetDrillDown
+        budget={selectedBudget}
+        contextType={activeContext.type}
+        contextId={activeContext.id}
+        onBack={() => setSelectedBudgetId(null)}
+      />
+    );
   }
 
   return (
@@ -1029,6 +1023,10 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
                       } as React.CSSProperties}
                     />
                   </div>
+                  {/* Row 2.5: Goal chip */}
+                  {(() => { const g = goalNameMap.get(s.goal_id); return g ? (
+                    <p className="text-[10px] text-(--color-text-tertiary) mb-1.5">{g.icon} {g.name}</p>
+                  ) : null; })()}
                   {/* Row 3: Spent / limit · status */}
                   <div className="flex items-center justify-between text-[12px] text-(--color-text-tertiary)">
                     <span className="font-(--font-mono)">${formatMoney(s.amount_spent)} / ${formatMoney(s.effective_limit)}</span>
@@ -1071,6 +1069,12 @@ function BudgetsPanel({ onGoTo, triggerCreateRef, activeContext }: {
                         {s.transaction_count > 0 && (
                           <span className="text-[10px] text-(--color-text-tertiary)">{s.transaction_count} txn{s.transaction_count !== 1 ? "s" : ""}</span>
                         )}
+                        {(() => { const g = goalNameMap.get(s.goal_id); return g ? (
+                          <span className="inline-flex items-center gap-1 max-w-[120px] px-1.5 py-0.5 rounded-(--radius-pill) bg-(--color-overlay) text-(--color-text-secondary) text-[10px] overflow-hidden">
+                            <span className="shrink-0">{g.icon}</span>
+                            <span className="truncate min-w-0">{g.name}</span>
+                          </span>
+                        ) : null; })()}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
@@ -1281,29 +1285,22 @@ function AnalyticsPanel({
   transactions,
   accounts,
   onGoTo,
+  goals,
 }: {
   transactions: Transaction[];
   accounts: Account[];
   onGoTo: (view: ViewState) => void;
+  goals: GoalSummary[];
 }) {
   const [period, setPeriod] = useState<Period>('MONTH');
-  const [goalTarget, setGoalTarget] = useState<number | null>(null);
-  const [goalTargetLoading, setGoalTargetLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/goals/summary")
-      .then(r => r.json())
-      .then((d: { goals?: { name?: string; goal_type?: string; target_amount?: number }[] }) => {
-        const dpGoal = (d.goals ?? []).find(g =>
-          g.name?.toLowerCase().includes("down payment") ||
-          g.name?.toLowerCase().includes("down") ||
-          g.goal_type === "down_payment"
-        );
-        setGoalTarget(dpGoal?.target_amount ?? 30000);
-        setGoalTargetLoading(false);
-      })
-      .catch(() => { setGoalTarget(30000); setGoalTargetLoading(false); });
-  }, []);
+  const dpGoal = goals.find(g =>
+    g.name?.toLowerCase().includes("down payment") ||
+    g.name?.toLowerCase().includes("down") ||
+    g.goal_type === "down_payment"
+  );
+  const goalTarget = dpGoal?.target_amount ?? 30000;
+  const goalTargetLoading = false;
 
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -1803,6 +1800,13 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
 
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [activeContext, setActiveContext] = useState<ActiveContext>({ type: "personal", id: userId });
+  const [teamWizardOpen, setTeamWizardOpen] = useState(false);
+  const [goals, setGoals] = useState<GoalSummary[]>([]);
+
+  // Manage tab sub-navigation: status (default) → all | drilldown | goals | bills
+  type ManageSubView = "status" | "all" | "drilldown" | "goals" | "bills";
+  const [manageSubView, setManageSubView] = useState<ManageSubView>("status");
+  const [drillDownBudget, setDrillDownBudget] = useState<BudgetSummaryRow | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -1827,6 +1831,13 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
       .then(d => setTeams(d.teams ?? []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch(`/api/goals/summary?context_type=${activeContext.type}&context_id=${activeContext.id}`)
+      .then(r => r.ok ? r.json() : { goals: [] })
+      .then((d: { goals?: GoalSummary[] }) => setGoals(d.goals ?? []))
+      .catch(() => {});
+  }, [activeContext.type, activeContext.id]);
 
   useEffect(() => {
     loadProfile().then(p => {
@@ -1854,6 +1865,12 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const contextLabel = activeContext.type === "personal"
     ? "Personal"
     : (teams.find(t => t.id === activeContext.id)?.name ?? "Team");
+
+  const activeTeamName = activeContext.type === "team"
+    ? (teams.find(t => t.id === activeContext.id)?.name ?? "Team")
+    : null;
+  const contextOwner = activeTeamName ?? "Your";
+  const contextOwnerLower = activeTeamName?.toLowerCase() ?? "your";
 
   useEffect(() => {
     fetch("/api/plaid/create-link-token", { method: "POST" })
@@ -1924,6 +1941,12 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         if (!alive) return;
         setAccounts(d.accounts);
         setTransactions(d.transactions);
+        // Populate persisted overrides so category labels survive a reload
+        const initial: Record<string, string> = {};
+        for (const tx of (d.transactions ?? []) as Array<{ transaction_id: string; category_override: string | null }>) {
+          if (tx.category_override) initial[tx.transaction_id] = tx.category_override;
+        }
+        setCategoryOverrides(initial);
         setLoading(false);
         setError(null);
       })
@@ -1971,11 +1994,27 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
   const totalSpent   = useMemo(() => transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions]);
   const totalIncome  = useMemo(() => transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0), [transactions]);
 
-  function changeCategory(txId: string, cat: string) {
-    setCategoryOverrides((prev) => ({ ...prev, [txId]: cat }));
+  async function changeCategory(txId: string, cat: string) {
+    const prev = categoryOverrides[txId];
+    // Optimistic update
+    setCategoryOverrides((o) => ({ ...o, [txId]: cat }));
+    const res = await fetch(`/api/transactions/${txId}/category`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: cat }),
+    });
+    if (!res.ok) {
+      // Revert on failure — no toast UI exists in v1
+      setCategoryOverrides((o) => {
+        const next = { ...o };
+        if (prev === undefined) delete next[txId]; else next[txId] = prev;
+        return next;
+      });
+    }
   }
 
   function navTo(v: ViewState) {
+    if (v === "manage") setManageSubView("status");
     setView(v);
     setSearch("");
     if (typeof v === "string") {
@@ -1993,6 +2032,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
     { id: "manage"       as ViewState, icon: <LayoutGrid size={16} />,      label: "Manage" },
     { id: "transactions" as ViewState, icon: <Search size={16} />,          label: "Transactions" },
     { id: "analytics"    as ViewState, icon: <PieChart size={16} />,        label: "Analytics" },
+    { id: "profile"      as ViewState, icon: <User size={16} />,            label: "Profile" },
   ];
 
   const panelProps: PanelProps = { transactions, accountMap, categoryOverrides, onChangeCategory: changeCategory, search, onSearch: setSearch };
@@ -2033,9 +2073,8 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
           backgroundSize: "200px 200px",
         }}
       >
-        {/* Back + label */}
-        <div className="px-4 pt-5 pb-3 flex items-center gap-2 border-b border-(--color-border-subtle)">
-          <Link href="/" aria-label="Arrow back" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"><ArrowLeft size={14} /></Link>
+        {/* Section label — /finances is the root route, no back arrow */}
+        <div className="px-4 pt-5 pb-3 border-b border-(--color-border-subtle)">
           <span className="text-[10px] text-(--color-text-disabled) uppercase tracking-[0.1em] font-medium">Finances</span>
         </div>
 
@@ -2102,9 +2141,9 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               key={team.id}
               data-testid={`context-team-${team.id}`}
               onClick={() => switchContext({ type: "team", id: team.id })}
-              className={`w-full flex items-center justify-between h-9 transition-colors ${
+              className={`w-full flex items-center justify-between h-9 transition-colors rounded-sm pl-1 ${
                 activeContext.type === "team" && activeContext.id === team.id
-                  ? "text-(--color-accent)"
+                  ? "text-(--color-accent) bg-(--color-accent)/5 border-l-2 border-(--color-accent)"
                   : "text-(--color-text-secondary) hover:text-(--color-text-primary)"
               }`}
             >
@@ -2117,6 +2156,13 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               )}
             </button>
           ))}
+          <button
+            onClick={() => setTeamWizardOpen(true)}
+            className="flex items-center gap-[10px] h-9 text-[13px] text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors w-full"
+          >
+            <Plus size={16} className="shrink-0" />
+            New team
+          </button>
           {activeContext.type === "team" && (
             <div data-testid="context-banner" className="flex items-center justify-between py-1 mt-0.5">
               <span className="text-[11px] text-(--color-text-secondary) truncate">{contextLabel}</span>
@@ -2129,6 +2175,15 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 <RotateCcw size={10} />
               </button>
             </div>
+          )}
+          {activeContext.type === "team" && (
+            <button
+              onClick={() => navTo("team-settings")}
+              className="flex items-center gap-[10px] h-8 text-[11px] text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors w-full mt-0.5"
+            >
+              <Settings2 size={13} className="shrink-0" />
+              Team settings
+            </button>
           )}
           <hr className="border-(--color-border-subtle) mt-2" />
         </div>
@@ -2222,9 +2277,16 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
 
         {/* Mobile top bar — identity + avatar; no hamburger */}
         <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-(--color-base) border-b border-(--color-border-subtle) flex items-center justify-between px-4 shrink-0">
-          <span className="text-[10px] uppercase tracking-[0.12em] text-(--color-text-disabled) font-medium">
-            Park Properties
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-(--color-text-disabled) font-medium">
+              Park Properties
+            </span>
+            {activeTeamName && (
+              <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-(--color-accent)/15 text-(--color-accent) border border-(--color-accent)/30 self-start">
+                {activeTeamName}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {connected.length > 0 && (
               <button
@@ -2349,7 +2411,7 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 )}
                 {mobileOverviewTab === 'budgets' && (
                   <div className="p-4">
-                    <BudgetsPanel onGoTo={navTo} activeContext={activeContext} />
+                    <BudgetsPanel onGoTo={navTo} activeContext={activeContext} goals={goals} />
                   </div>
                 )}
               </div>
@@ -2374,11 +2436,11 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
               </div>
             )}
             {view === "analytics" && connected.length > 0 && !loading && (
-              <AnalyticsPanel transactions={transactions} accounts={accounts} onGoTo={navTo} />
+              <AnalyticsPanel transactions={transactions} accounts={accounts} onGoTo={navTo} goals={goals} />
             )}
             <div className={view === "analytics" ? "hidden" : (view === "profile" || view === "transactions" || view === "manage") ? "" : "max-w-2xl mx-auto"}>
             {/* Budgets and Goals have their own data fetching */}
-            {view === "budgets" && <BudgetsPanel onGoTo={navTo} activeContext={activeContext} />}
+            {view === "budgets" && <BudgetsPanel onGoTo={navTo} activeContext={activeContext} goals={goals} />}
             {view === "goals"   && <GoalsPanel activeContext={activeContext} contextLabel={contextLabel} onReset={resetToPersonal} />}
             {view === "debts"   && (
               <div className="space-y-8">
@@ -2388,9 +2450,28 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 </div>
               </div>
             )}
-            {view === "bills" && <BillsPanel />}
-            {view === "profile" && <ProfilePanel activeContext={activeContext} onNavigate={navTo} />}
-            {view === "manage" && (
+            {view === "bills" && <BillsPanel accounts={accounts} />}
+            {view === "profile" && <ProfilePanel activeContext={activeContext} onNavigate={navTo} teams={teams} switchContext={switchContext} onAddTeam={() => setTeamWizardOpen(true)} />}
+            {view === "team-settings" && activeContext.type === "team" && (
+              <TeamSettingsPanel
+                teamId={activeContext.id}
+                userId={userId}
+                onBack={() => navTo("overview")}
+                onTeamDeleted={() => { setTeams(prev => prev.filter(t => t.id !== activeContext.id)); resetToPersonal(); navTo("overview"); }}
+                onTeamLeft={() => { setTeams(prev => prev.filter(t => t.id !== activeContext.id)); resetToPersonal(); }}
+              />
+            )}
+            {view === "manage" && manageSubView === "status" && (
+              <StatusPage
+                activeContext={activeContext}
+                goals={goals}
+                onManageAll={() => setManageSubView("all")}
+                onBudgetDrillDown={(budget) => { setDrillDownBudget(budget); setManageSubView("drilldown"); }}
+                onViewAllGoals={() => setManageSubView("goals")}
+                onViewAllBills={() => setManageSubView("bills")}
+              />
+            )}
+            {view === "manage" && manageSubView === "all" && (
               <ManagePanel
                 activeContext={activeContext}
                 onNavigate={navTo}
@@ -2398,8 +2479,43 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
                 onReset={resetToPersonal}
                 pendingDebtLink={pendingDebtLink}
                 setPendingDebtLink={setPendingDebtLink}
-                budgetsPanelSlot={<BudgetsPanel onGoTo={navTo} triggerCreateRef={budgetCreateRef} activeContext={activeContext} />}
+                budgetsPanelSlot={<BudgetsPanel onGoTo={navTo} triggerCreateRef={budgetCreateRef} activeContext={activeContext} goals={goals} />}
                 budgetCreateRef={budgetCreateRef}
+                accounts={accounts}
+                goals={goals}
+                onBack={() => setManageSubView("status")}
+              />
+            )}
+            {view === "manage" && manageSubView === "goals" && (
+              <div>
+                <button
+                  onClick={() => setManageSubView("status")}
+                  className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-text-primary) transition-colors px-4 py-3 border-b border-(--color-border-subtle) w-full"
+                >
+                  <ChevronLeft size={15} />
+                  Back
+                </button>
+                <GoalsPanel activeContext={activeContext} contextLabel={contextLabel} onReset={resetToPersonal} />
+              </div>
+            )}
+            {view === "manage" && manageSubView === "bills" && (
+              <div>
+                <button
+                  onClick={() => setManageSubView("status")}
+                  className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-text-primary) transition-colors px-4 py-3 border-b border-(--color-border-subtle) w-full"
+                >
+                  <ChevronLeft size={15} />
+                  Back
+                </button>
+                <BillsPanel accounts={accounts} />
+              </div>
+            )}
+            {view === "manage" && manageSubView === "drilldown" && drillDownBudget && (
+              <BudgetDrillDown
+                budget={drillDownBudget}
+                contextType={activeContext.type}
+                contextId={activeContext.id}
+                onBack={() => setManageSubView("status")}
               />
             )}
 
@@ -2456,6 +2572,17 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
         </div>
       </nav>
 
+      {teamWizardOpen && (
+        <TeamSetupWizard
+          userId={userId}
+          onComplete={(team) => {
+            setTeams(prev => [...prev, team]);
+            switchContext({ type: "team", id: team.id });
+            setTeamWizardOpen(false);
+          }}
+          onClose={() => setTeamWizardOpen(false)}
+        />
+      )}
     </div>
   );
 }

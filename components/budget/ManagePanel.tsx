@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, Wallet, CalendarClock, Target, CreditCard, Building2, LayoutGrid, LayoutList } from "lucide-react";
+import { ChevronLeft, Plus, Wallet, CalendarClock, Target, CreditCard, Building2, LayoutGrid, LayoutList } from "lucide-react";
 import { ActiveContext } from "@/lib/goals/types";
 import { ViewState } from "./types";
 import GoalsPanel, { type GoalsPanelHandle } from "@/components/GoalsPanel";
 import BillsPanel, { type BillsPanelHandle } from "@/components/bills/BillsPanel";
+import { Account } from "@/components/budget/types";
 import DebtPanel, { type DebtPanelHandle } from "@/components/debts/DebtPanel";
 import AssetsSection, { type AssetsSectionHandle } from "@/components/assets/AssetsSection";
 import BudgetTableView from "./BudgetTableView";
@@ -39,6 +40,12 @@ interface ManagePanelProps {
   budgetsPanelSlot: React.ReactNode;
   /** Ref populated by BudgetsPanel so ManagePanel can trigger its create form */
   budgetCreateRef: React.MutableRefObject<(() => void) | null>;
+  /** Threaded from BudgetClient for BillsPanel cash-projection chart seed */
+  accounts?: Account[];
+  /** Threaded from BudgetClient top-level goals fetch; passed to BudgetTableView */
+  goals: { id: string; name: string; icon: string }[];
+  /** When provided, renders a back affordance above the panel (Status → Manage all path). */
+  onBack?: () => void;
 }
 
 // ─── Section metadata ─────────────────────────────────────────────────────────
@@ -92,6 +99,9 @@ export default function ManagePanel({
   setPendingDebtLink,
   budgetsPanelSlot,
   budgetCreateRef,
+  accounts,
+  goals,
+  onBack,
 }: ManagePanelProps) {
   const [activeSection, setActiveSection] = useState<Section>("budgets");
 
@@ -147,7 +157,17 @@ export default function ManagePanel({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row overflow-hidden lg:h-[calc(100vh-56px)]">
+    <>
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-text-primary) transition-colors px-4 py-3 border-b border-(--color-border-subtle) w-full"
+        >
+          <ChevronLeft size={15} />
+          Back
+        </button>
+      )}
+      <div className="flex flex-col lg:flex-row overflow-hidden lg:h-[calc(100vh-56px)]">
 
       {/* ── Mobile pill strip — hidden on desktop ── */}
       <nav
@@ -251,7 +271,7 @@ export default function ManagePanel({
 
         {/* Panels */}
         {activeSection === "budgets" && (
-          budgetsView === "card" ? budgetsPanelSlot : <BudgetTableView onEdit={() => setCurrentView("card")} />
+          budgetsView === "card" ? budgetsPanelSlot : <BudgetTableView onEdit={() => setCurrentView("card")} goals={goals} />
         )}
 
         {activeSection === "goals" && (
@@ -262,7 +282,7 @@ export default function ManagePanel({
 
         {activeSection === "bills" && (
           billsView === "card"
-            ? <BillsPanel ref={billsRef} />
+            ? <BillsPanel ref={billsRef} accounts={accounts} />
             : <BillTableView onEdit={() => setCurrentView("card")} />
         )}
 
@@ -296,5 +316,6 @@ export default function ManagePanel({
         )}
       </div>
     </div>
+    </>
   );
 }

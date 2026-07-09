@@ -16,11 +16,18 @@ export default function CategoryPill({ category, transactionId, onChangeCategory
 
   useEffect(() => {
     if (!open) return;
-    function handler(e: MouseEvent) {
+    function onMouseDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   return (
@@ -38,7 +45,10 @@ export default function CategoryPill({ category, transactionId, onChangeCategory
           {Object.entries(CATEGORY_META).map(([key, m]) => (
             <button
               key={key}
-              onClick={() => { onChangeCategory(transactionId, key); setOpen(false); }}
+              onClick={() => {
+                onChangeCategory(transactionId, key);
+                setOpen(false);
+              }}
               className={`w-full text-left px-3 py-2 text-xs hover:bg-[#2e2e38] transition-colors flex items-center gap-2 ${key === category ? "opacity-100" : "opacity-60 hover:opacity-100"}`}
             >
               <span className={`px-1.5 py-0.5 rounded-full ${m.color}`}>{m.label}</span>

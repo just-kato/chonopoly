@@ -4,21 +4,8 @@ import { useEffect } from "react";
 import { X, Trash2, Check } from "lucide-react";
 import { CATEGORY_META, formatMoney } from "@/components/budget/types";
 import type { Bill } from "@/components/bills/BillsWidget";
-
-// ─── Helpers (local — not worth exporting) ────────────────────────────────────
-
-function isPaidThisCycle(bill: Bill): boolean {
-  if (!bill.last_paid_at) return false;
-  const paid = new Date(bill.last_paid_at);
-  const today = new Date();
-  if (bill.recurrence === "monthly")
-    return paid.getFullYear() === today.getFullYear() && paid.getMonth() === today.getMonth();
-  if (bill.recurrence === "weekly")
-    return (today.getTime() - paid.getTime()) / 86400000 < 7;
-  if (bill.recurrence === "yearly")
-    return paid.getFullYear() === today.getFullYear();
-  return !!bill.last_paid_at;
-}
+import { isPaidThisCycle } from "@/lib/budget/verdict";
+import { isOverdueBill, formatCurrentDue } from "@/lib/bills/cycle";
 
 // Returns the ISO Monday of the week containing `date` as a "YYYY-MM-DD" key.
 function mondayKey(date: Date): string {
@@ -89,7 +76,9 @@ export default function BillDetailModal({
   onDelete,
   onRemovePayment,
 }: BillDetailModalProps) {
+  const today = new Date();
   const paid = isPaidThisCycle(bill);
+  const overdue = isOverdueBill(bill, today) && !paid;
   const meta = bill.category_id ? CATEGORY_META[bill.category_id] : null;
 
   const timesPaid = bill.bill_payments.length;
@@ -136,7 +125,11 @@ export default function BillDetailModal({
           <div>
             <p className="font-(--font-display) text-[20px] text-(--color-text-primary) leading-tight">{bill.name}</p>
             <p className="font-(--font-mono) text-[28px] text-(--color-text-primary) mt-1">${formatMoney(bill.amount)}</p>
-            <p className="text-[13px] text-(--color-text-secondary) mt-0.5">Due on {formatDueDate(bill.next_due_date)}</p>
+            {overdue ? (
+              <p className="text-[13px] text-(--color-danger) mt-0.5">Overdue since {formatCurrentDue(bill, today)}</p>
+            ) : (
+              <p className="text-[13px] text-(--color-text-secondary) mt-0.5">Due on {formatDueDate(bill.next_due_date)}</p>
+            )}
           </div>
           <button
             onClick={onClose}

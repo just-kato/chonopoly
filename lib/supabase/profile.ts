@@ -9,7 +9,7 @@ export type Profile = {
   avatar_color: string | null;
   onboarding_complete: boolean;
   pay_cycle_start_day: number | null;
-  morning_report_enabled: boolean;
+  weekly_report_enabled: boolean;
   health_score_last_calculated: string | null;
 };
 
@@ -22,7 +22,7 @@ const EMPTY: Profile = {
   avatar_color: "amber",
   onboarding_complete: false,
   pay_cycle_start_day: 1,
-  morning_report_enabled: true,
+  weekly_report_enabled: true,
   health_score_last_calculated: null,
 };
 
@@ -33,7 +33,7 @@ export async function loadProfile(): Promise<Profile> {
 
   const { data } = await supabase
     .from("profiles")
-    .select("username, last_chapter_id, last_tab_slug, role, avatar_url, avatar_color, onboarding_complete, pay_cycle_start_day, morning_report_enabled, health_score_last_calculated")
+    .select("username, last_chapter_id, last_tab_slug, role, avatar_url, avatar_color, onboarding_complete, pay_cycle_start_day, weekly_report_enabled, health_score_last_calculated")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -80,7 +80,7 @@ export async function updateProfile(fields: {
 
 export async function updateProfileSettings(fields: {
   pay_cycle_start_day?: number;
-  morning_report_enabled?: boolean;
+  weekly_report_enabled?: boolean;
   onboarding_complete?: boolean;
 }): Promise<{ error?: string }> {
   const supabase = createClient();
@@ -89,7 +89,7 @@ export async function updateProfileSettings(fields: {
 
   const patch: Record<string, unknown> = { id: user.id, updated_at: new Date().toISOString() };
   if (fields.pay_cycle_start_day !== undefined) patch.pay_cycle_start_day = fields.pay_cycle_start_day;
-  if (fields.morning_report_enabled !== undefined) patch.morning_report_enabled = fields.morning_report_enabled;
+  if (fields.weekly_report_enabled !== undefined) patch.weekly_report_enabled = fields.weekly_report_enabled;
   if (fields.onboarding_complete !== undefined) patch.onboarding_complete = fields.onboarding_complete;
 
   const { error } = await supabase.from("profiles").upsert(patch, { onConflict: "id" });

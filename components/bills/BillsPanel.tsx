@@ -7,32 +7,18 @@ import {
 } from "recharts";
 import {
   LayoutGrid, TrendingDown, CalendarDays, Plus,
-  ChevronLeft, ChevronRight, Check, Pencil, Trash2, ChevronDown, X,
+  Check, Pencil, Trash2, ChevronDown, X,
 } from "lucide-react";
 import { Account, CATEGORY_META, formatMoney } from "@/components/budget/types";
 import { StatCard } from "@/components/budget/StatCard";
 import type { Bill } from "@/components/bills/BillsWidget";
 import BillDetailModal from "@/components/bills/BillDetailModal";
 import { BillWizard } from "@/components/bills/BillWizard";
+import { isPaidThisCycle } from "@/lib/budget/verdict";
+import { isOverdueBill, formatCurrentDue } from "@/lib/bills/cycle";
+import { MonthNav } from "@/components/bills/MonthNav";
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
-
-function toDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isPaidThisCycle(bill: Bill): boolean {
-  if (!bill.last_paid_at) return false;
-  const paid = new Date(bill.last_paid_at);
-  const today = new Date();
-  if (bill.recurrence === "monthly")
-    return paid.getFullYear() === today.getFullYear() && paid.getMonth() === today.getMonth();
-  if (bill.recurrence === "weekly")
-    return (today.getTime() - paid.getTime()) / 86400000 < 7;
-  if (bill.recurrence === "yearly")
-    return paid.getFullYear() === today.getFullYear();
-  return !!bill.last_paid_at;
-}
 
 function getDaysUntil(nextDueDate: string): number {
   const today = new Date();
@@ -61,19 +47,28 @@ function avatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function groupBills(bills: Bill[]) {
-  const overdue: Bill[] = [], thisWeek: Bill[] = [], thisMonth: Bill[] = [], later: Bill[] = [];
+function groupBillsForMonth(
+  bills: Bill[],
+  today: Date,
+  viewedMonth: Date,
+): { overdue: Bill[]; dueThisMonth: Bill[]; paid: Bill[] } {
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const billsByDay = buildBillsByDay(bills, year, month, daysInMonth);
+  const inMonth = new Set<string>();
+  for (const arr of Object.values(billsByDay)) for (const b of arr) inMonth.add(b.id);
+
+  const overdue: Bill[] = [], dueThisMonth: Bill[] = [], paid: Bill[] = [];
   for (const b of bills) {
-    if (isPaidThisCycle(b)) { thisMonth.push(b); continue; }
-    const d = getDaysUntil(b.next_due_date);
-    if (d < 0) overdue.push(b);
-    else if (d <= 7) thisWeek.push(b);
-    else if (d <= 31) thisMonth.push(b);
-    else later.push(b);
+    if (isPaidThisCycle(b)) { paid.push(b); continue; }
+    if (isOverdueBill(b, today)) { overdue.push(b); continue; }
+    if (inMonth.has(b.id)) dueThisMonth.push(b);
   }
-  return { overdue, thisWeek, thisMonth, later };
+  return { overdue, dueThisMonth, paid };
 }
 
+// DRIFT NOTE: uses local-time arithmetic (new Date(year, month, d)); see cycle.ts header comment.
 function buildBillsByDay(
   bills: Bill[], year: number, month: number, daysInMonth: number,
 ): Record<number, Bill[]> {
@@ -113,19 +108,19 @@ const CATEGORY_OPTIONS = Object.entries(CATEGORY_META)
 // ─── Summary bar ──────────────────────────────────────────────────────────────
 
 function SummaryBar({ bills }: { bills: Bill[] }) {
+  const today = new Date();
   const totalDueMonth = bills
-    .filter(b => !isPaidThisCycle(b) && getDaysUntil(b.next_due_date) >= 0)
+    .filter(b => !isPaidThisCycle(b) && !isOverdueBill(b, today))
     .reduce((s, b) => s + b.amount, 0);
   const totalOverdue = bills
-    .filter(b => !isPaidThisCycle(b) && getDaysUntil(b.next_due_date) < 0)
+    .filter(b => !isPaidThisCycle(b) && isOverdueBill(b, today))
     .reduce((s, b) => s + b.amount, 0);
   const paidMonth = bills
     .filter(b => isPaidThisCycle(b))
     .reduce((s, b) => s + b.amount, 0);
   const upcoming = bills
-    .filter(b => !isPaidThisCycle(b))
-    .sort((a, b) => getDaysUntil(a.next_due_date) - getDaysUntil(b.next_due_date))
-    .find(b => getDaysUntil(b.next_due_date) >= 0);
+    .filter(b => !isPaidThisCycle(b) && !isOverdueBill(b, today))
+    .sort((a, b) => getDaysUntil(a.next_due_date) - getDaysUntil(b.next_due_date))[0] ?? null;
   const nextInDays = upcoming ? getDaysUntil(upcoming.next_due_date) : null;
 
   const nextBillVariant = nextInDays === null
@@ -190,13 +185,15 @@ function SummaryBar({ bills }: { bills: Bill[] }) {
 
 // ─── Grid view (panel variant) ────────────────────────────────────────────────
 
-function PanelGridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
+function PanelGridView({ bills, viewedMonth, onMarkPaid, onMarkUnpaid, onBillClick }: {
   bills: Bill[];
+  viewedMonth: Date;
   onMarkPaid: (b: Bill) => void;
   onMarkUnpaid: (b: Bill) => void;
   onBillClick: (b: Bill) => void;
 }) {
-  const { overdue, thisWeek, thisMonth, later } = groupBills(bills);
+  const today = new Date();
+  const { overdue, dueThisMonth, paid } = groupBillsForMonth(bills, today, viewedMonth);
 
   if (bills.length === 0) {
     return (
@@ -208,9 +205,8 @@ function PanelGridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
 
   const sections = [
     { label: "Overdue", items: overdue, labelColor: "text-(--color-danger)" },
-    { label: "This week", items: thisWeek, labelColor: "text-(--color-warning)" },
-    { label: "This month", items: thisMonth, labelColor: "text-(--color-text-disabled)" },
-    { label: "Later", items: later, labelColor: "text-(--color-text-disabled)" },
+    { label: "Due this month", items: dueThisMonth, labelColor: "text-(--color-text-disabled)" },
+    { label: "Paid", items: paid, labelColor: "text-(--color-text-disabled)" },
   ].filter(s => s.items.length > 0);
 
   return (
@@ -221,8 +217,7 @@ function PanelGridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
           <div className="divide-y divide-(--color-border-subtle) bg-(--color-elevated) border border-(--color-border-default) rounded-lg overflow-hidden">
             {items.map(b => {
               const paid = isPaidThisCycle(b);
-              const daysUntil = getDaysUntil(b.next_due_date);
-              const isOverdue = daysUntil < 0 && !paid;
+              const isOverdue = isOverdueBill(b, today) && !paid;
               const initial = b.name.charAt(0).toUpperCase();
               const color = avatarColor(b.name);
               return (
@@ -235,7 +230,7 @@ function PanelGridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
                     <div className="flex-1 min-w-0">
                       <p className="text-[15px] font-semibold text-(--color-text-primary) truncate">{b.name}</p>
                       <p className="text-[12px] text-(--color-text-tertiary)">
-                        {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
+                        {paid ? "Paid this cycle" : isOverdue ? `Overdue since ${formatCurrentDue(b, today)}` : `Due ${formatDueDate(b.next_due_date)}`}
                         {b.recurrence !== "one-time" && ` · ${b.recurrence}`}
                       </p>
                     </div>
@@ -261,7 +256,7 @@ function PanelGridView({ bills, onMarkPaid, onMarkUnpaid, onBillClick }: {
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] text-(--color-text-primary) truncate">{b.name}</p>
                       <p className="text-[12px] text-(--color-text-tertiary)">
-                        {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
+                        {paid ? "Paid this cycle" : isOverdue ? `Overdue since ${formatCurrentDue(b, today)}` : `Due ${formatDueDate(b.next_due_date)}`}
                         {b.recurrence !== "one-time" && (
                           <span className="ml-2 capitalize text-(--color-text-disabled)">{b.recurrence}</span>
                         )}
@@ -313,27 +308,32 @@ interface ProjectionPoint {
   billsDue: string[];
 }
 
-function buildProjection(bills: Bill[], accounts: Account[]): ProjectionPoint[] {
+function buildProjection(bills: Bill[], accounts: Account[], viewedMonth: Date): ProjectionPoint[] {
   const seed = accounts
     .filter(a => a.type === "depository")
     .reduce((s, a) => s + (a.balances.current ?? 0), 0);
 
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const billsByDay = buildBillsByDay(bills, year, month, daysInMonth);
   const points: ProjectionPoint[] = [];
   let running = seed;
 
-  for (let i = 0; i <= 30; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    const dateStr = toDateStr(date);
-    const due = bills.filter(b => b.next_due_date === dateStr && !isPaidThisCycle(b));
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    date.setHours(0, 0, 0, 0);
+    const isAfterToday = date > today;
+    const due = (billsByDay[d] ?? []).filter(b => !isPaidThisCycle(b));
     for (const b of due) running -= b.amount;
     const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     points.push({
       label,
-      past: i === 0 ? running : null,
-      projected: i > 0 ? running : null,
+      past: !isAfterToday ? running : null,
+      projected: isAfterToday ? running : null,
       billsDue: due.map(b => b.name),
     });
   }
@@ -367,8 +367,11 @@ function ChartTooltip({
   );
 }
 
-function PanelChartView({ bills, accounts }: { bills: Bill[]; accounts: Account[] }) {
-  const data = buildProjection(bills, accounts);
+function PanelChartView({ bills, accounts, viewedMonth }: { bills: Bill[]; accounts: Account[]; viewedMonth: Date }) {
+  const data = buildProjection(bills, accounts, viewedMonth);
+  const today = new Date();
+  const todayLabel = today.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const todayPoint = data.find(p => p.label === todayLabel);
   return (
     <div style={{ height: 280 }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -391,12 +394,14 @@ function PanelChartView({ bills, accounts }: { bills: Bill[]; accounts: Account[
           <RechartsTooltip content={(p) => (
             <ChartTooltip active={p.active} payload={p.payload as unknown[]} label={p.label as string} />
           )} />
-          <ReferenceLine
-            x={data[0]?.label}
-            stroke="var(--color-border-strong)"
-            strokeDasharray="3 3"
-            label={{ value: "Today", position: "insideTopLeft", fill: "var(--color-text-tertiary)", fontSize: 10 }}
-          />
+          {todayPoint && (
+            <ReferenceLine
+              x={todayPoint.label}
+              stroke="var(--color-border-strong)"
+              strokeDasharray="3 3"
+              label={{ value: "Today", position: "insideTopLeft", fill: "var(--color-text-tertiary)", fontSize: 10 }}
+            />
+          )}
           <Line dataKey="past" stroke="var(--color-accent)" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
           <Line
             dataKey="projected"
@@ -419,18 +424,13 @@ function PanelChartView({ bills, accounts }: { bills: Bill[]; accounts: Account[
 
 // ─── Calendar view (panel variant) ────────────────────────────────────────────
 
-function PanelCalendarView({ bills, onBillClick }: {
+function PanelCalendarView({ bills, viewedMonth, onBillClick }: {
   bills: Bill[];
+  viewedMonth: Date;
   onBillClick: (b: Bill) => void;
 }) {
-  const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
-
-  useEffect(() => { setCurrentMonth(new Date()); }, []);
-
-  if (!currentMonth) return null;
-
-  const year = currentMonth.getFullYear();
-  const month = currentMonth.getMonth();
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
   const today = new Date();
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -460,26 +460,8 @@ function PanelCalendarView({ bills, onBillClick }: {
     return `$${Math.round(n).toLocaleString("en-US")}`;
   }
 
-  const monthLabel = currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
-          className="p-1.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"
-        >
-          <ChevronLeft size={16} />
-        </button>
-        <p className="text-sm font-medium text-(--color-text-secondary)">{monthLabel}</p>
-        <button
-          onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
-          className="p-1.5 text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"
-        >
-          <ChevronRight size={16} />
-        </button>
-      </div>
-
       <div className="grid grid-cols-7 mb-2">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
           <p key={d} className="text-[11px] text-(--color-text-disabled) text-center">{d}</p>
@@ -705,8 +687,8 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
       <div className="bg-(--color-elevated) border border-(--color-border-default) rounded-lg overflow-hidden divide-y divide-(--color-border-subtle)">
         {bills.map(b => {
           const paid = isPaidThisCycle(b);
-          const daysUntil = getDaysUntil(b.next_due_date);
-          const isOverdue = daysUntil < 0 && !paid;
+          const today = new Date();
+          const isOverdue = isOverdueBill(b, today) && !paid;
           const isExpanded = expanded.has(b.id);
           const color = avatarColor(b.name);
           const meta = b.category_id ? CATEGORY_META[b.category_id] : null;
@@ -721,7 +703,7 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-semibold text-(--color-text-primary) truncate">{b.name}</p>
                   <p className="text-[12px] text-(--color-text-tertiary) capitalize">
-                    {paid ? "Paid this cycle" : isOverdue ? "Overdue" : `Due ${formatDueDate(b.next_due_date)}`}
+                    {paid ? "Paid this cycle" : isOverdue ? `Overdue since ${formatCurrentDue(b, today)}` : `Due ${formatDueDate(b.next_due_date)}`}
                     {b.recurrence !== "one-time" && ` · ${b.recurrence}`}
                   </p>
                 </div>
@@ -764,7 +746,7 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
                   </div>
                   <p className="text-[12px] text-(--color-text-tertiary) capitalize">
                     {b.recurrence} · Day {b.due_day}
-                    {paid ? " · Paid this cycle" : isOverdue ? " · Overdue" : ` · Due ${formatDueDate(b.next_due_date)}`}
+                    {paid ? " · Paid this cycle" : isOverdue ? ` · Overdue since ${formatCurrentDue(b, today)}` : ` · Due ${formatDueDate(b.next_due_date)}`}
                   </p>
                 </div>
 
@@ -858,17 +840,21 @@ function BillsList({ bills, onEdit, onDelete, onMarkPaid, onMarkUnpaid, onRefres
 type PanelView = "grid" | "chart" | "calendar";
 
 export interface BillsPanelHandle { triggerCreate: () => void }
+interface BillsPanelOwnProps { accounts?: Account[] }
 
-const BillsPanel = forwardRef<BillsPanelHandle>(function BillsPanel(_, ref) {
+const BillsPanel = forwardRef<BillsPanelHandle, BillsPanelOwnProps>(
+  function BillsPanel({ accounts: accountsProp }, ref) {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>(accountsProp ?? []);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<PanelView>("grid");
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewedMonth, setViewedMonth] = useState<Date | null>(null);
 
   useImperativeHandle(ref, () => ({ triggerCreate: () => setShowAddForm(true) }));
+  useEffect(() => { setViewedMonth(new Date()); }, []);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
 
   const selectedBill = bills.find(b => b.id === selectedBillId) ?? null;
@@ -882,17 +868,20 @@ const BillsPanel = forwardRef<BillsPanelHandle>(function BillsPanel(_, ref) {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [billsRes, txRes] = await Promise.all([
-        fetch("/api/bills"),
-        fetch("/api/plaid/transactions"),
-      ]);
+      const billsRes = await fetch("/api/bills");
       const billsData = billsRes.ok ? await billsRes.json() : { bills: [] };
-      const txData = txRes.ok ? await txRes.json() : { accounts: [] };
       setBills(billsData.bills ?? []);
-      setAccounts(txData.accounts ?? []);
+      if (!accountsProp) {
+        // Fallback: fetch accounts independently when not provided by parent
+        const txRes = await fetch("/api/plaid/transactions");
+        const txData = txRes.ok ? await txRes.json() : { accounts: [] };
+        setAccounts(txData.accounts ?? []);
+      }
       setLoading(false);
     }
     init();
+  // accountsProp intentionally excluded — only used as seed on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function markUnpaid(bill: Bill) {
@@ -987,10 +976,16 @@ const BillsPanel = forwardRef<BillsPanelHandle>(function BillsPanel(_, ref) {
           </button>
         </div>
 
+        {viewedMonth && (
+          <div className="px-4 py-2 border-b border-(--color-border-subtle)">
+            <MonthNav month={viewedMonth} onChange={setViewedMonth} size="sm" />
+          </div>
+        )}
+
         <div className="p-4">
-          {activeView === "grid" && <PanelGridView bills={bills} onMarkPaid={markPaid} onMarkUnpaid={markUnpaid} onBillClick={b => setSelectedBillId(b.id)} />}
-          {activeView === "chart" && <PanelChartView bills={bills} accounts={accounts} />}
-          {activeView === "calendar" && <PanelCalendarView bills={bills} onBillClick={b => setSelectedBillId(b.id)} />}
+          {activeView === "grid" && viewedMonth && <PanelGridView bills={bills} viewedMonth={viewedMonth} onMarkPaid={markPaid} onMarkUnpaid={markUnpaid} onBillClick={b => setSelectedBillId(b.id)} />}
+          {activeView === "chart" && viewedMonth && <PanelChartView bills={bills} accounts={accounts} viewedMonth={viewedMonth} />}
+          {activeView === "calendar" && viewedMonth && <PanelCalendarView bills={bills} viewedMonth={viewedMonth} onBillClick={b => setSelectedBillId(b.id)} />}
         </div>
       </div>
 

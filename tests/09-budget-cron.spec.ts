@@ -169,14 +169,17 @@ test.describe("nightly-budget-reset Edge Function", () => {
     if (!goal) throw new Error("Failed to insert test goal");
     goalId = goal.id;
 
-    // Seed budget with period_end = today so the reset fires
-    const t = today();
+    // Seed budget with period_end = yesterday. The function queries period_end < today
+    // (strictly less than), so today's date is never matched; yesterday always is.
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yester = yesterday.toISOString().split("T")[0];
     const { data: budget } = await db
       .from("budgets")
       .insert({
         goal_id: goalId, owner_type: "personal", owner_id: userId,
         category_id: "GENERAL_MERCHANDISE", period_type: "monthly",
-        period_start: t, period_end: t,
+        period_start: yester, period_end: yester,
         total_limit: 200, recurring: true, rollover_enabled: false, status: "active",
       })
       .select("id")
@@ -222,6 +225,7 @@ test.describe("nightly-budget-reset Edge Function", () => {
       .eq("status", "active")
       .single();
     expect(next).not.toBeNull();
-    expect(next!.period_start > today()).toBeTruthy(); // next period starts tomorrow or later
+    // period_end was yesterday → new period starts today; >= is correct (not strictly >)
+    expect(next!.period_start >= today()).toBeTruthy();
   });
 });

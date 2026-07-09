@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Building2, Camera, Check, CheckCircle2, ChevronDown, Edit2,
-  GripVertical, Lock, Plus, Shield, ShieldCheck, Sparkles, Target,
-  TrendingUp, Trophy, Trash2, Wallet, X,
+  Activity, ArrowDown, ArrowUp, Building2, Camera, Check, CheckCircle2,
+  ChevronDown, Edit2, GripVertical, Lock, Plus, RefreshCw, Shield, ShieldCheck,
+  Sparkles, Target, TrendingUp, Trophy, Trash2, Wallet, X,
 } from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, ResponsiveContainer } from "recharts";
+import MilestoneLadder from "./MilestoneLadder";
 import {
   DndContext,
   closestCenter,
@@ -34,7 +36,7 @@ interface ProfileData {
   email: string | null;
   onboarding_complete: boolean;
   pay_cycle_start_day: number;
-  morning_report_enabled: boolean;
+  weekly_report_enabled: boolean;
   dashboard_layout: string[] | null;
 }
 
@@ -72,7 +74,7 @@ interface GoalOption {
   id: string;
   title: string;
   target_amount: number;
-  current_amount: number;
+  current_balance: number;
 }
 
 interface BudgetSummary {
@@ -82,6 +84,7 @@ interface BudgetSummary {
 
 interface Transaction {
   amount: number;
+  date: string;
   personal_finance_category: { primary: string } | null;
   account_id: string;
 }
@@ -177,7 +180,7 @@ function scoreColorClass(score: number) {
 function scoreBarColor(score: number, max: number) {
   const pct = score / max;
   if (pct >= 0.7) return "var(--color-success)";
-  if (pct >= 0.4) return "#f59e0b";
+  if (pct >= 0.4) return "var(--color-warning)";
   return "var(--color-danger)";
 }
 
@@ -272,9 +275,10 @@ interface SortableCardProps {
   id: string;
   gridColumn: string;
   children: React.ReactNode;
+  className?: string;
 }
 
-function SortableCard({ id, gridColumn, children }: SortableCardProps) {
+function SortableCard({ id, gridColumn, children, className }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style: React.CSSProperties = {
@@ -289,12 +293,12 @@ function SortableCard({ id, gridColumn, children }: SortableCardProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="group/card">
-      {/* Drag handle — visible on hover only */}
+    <div ref={setNodeRef} style={style} className={`group/card${className ? ` ${className}` : ""}`}>
+      {/* Drag handle — desktop only, visible on hover */}
       <button
         {...attributes}
         {...listeners}
-        className="absolute top-3 right-3 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-(--color-text-disabled) hover:text-(--color-text-secondary)"
+        className="hidden lg:block absolute top-3 right-3 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-(--color-text-disabled) hover:text-(--color-text-secondary)"
         tabIndex={-1}
         aria-label="Drag to reorder"
       >
@@ -319,11 +323,16 @@ const CARD_SPANS: Record<string, string> = {
 interface ProfilePanelProps {
   activeContext: ActiveContext;
   onNavigate: (view: ViewState) => void;
+  teams?: { id: string; name: string }[];
+  switchContext?: (ctx: { type: "personal" | "team"; id: string }) => void;
+  onAddTeam?: () => void;
 }
 
-export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanelProps) {
+export default function ProfilePanel({ activeContext, onNavigate, teams, switchContext, onAddTeam }: ProfilePanelProps) {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [netWorth, setNetWorth] = useState<NetWorthData | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<PlaidAccountFull[]>([]);
   const [dreams, setDreams] = useState<Dream[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -345,6 +354,7 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
   const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
   const [dreamModal, setDreamModal] = useState<{ mode: "add" } | { mode: "edit"; dream: Dream } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Drag-and-drop card order
   const DEFAULT_ORDER = ["net-worth", "financial-health", "banks", "dreams"];
@@ -375,13 +385,17 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
         setCardOrder(profileRes.dashboard_layout);
       }
     }
-    if (nwRes) setNetWorth(nwRes);
+    if (nwRes) {
+      setNetWorth(nwRes);
+      setRefreshedAt((nwRes as { refreshed_at?: string | null }).refreshed_at ?? null);
+    }
     if (accountsRes?.accounts) setAccounts(accountsRes.accounts);
     if (dreamsRes?.dreams) setDreams(dreamsRes.dreams);
     if (milestonesRes?.milestones) setMilestones(milestonesRes.milestones);
     if (goalsRes?.goals) setGoalOptions(goalsRes.goals.map((g: GoalOption) => g));
     if (budgetsRes?.summaries) setBudgetSummaries(budgetsRes.summaries);
     if (txRes?.transactions) setTransactions(txRes.transactions);
+    setDataLoaded(true);
   }, [activeContext.type, activeContext.id]);
 
   useEffect(() => {
@@ -396,6 +410,17 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    const res = await fetch("/api/net-worth/refresh", { method: "POST" });
+    if (res.ok) {
+      const d = await res.json() as { net_worth?: number; total_assets?: number; total_debts?: number; refreshed_at?: string };
+      setNetWorth({ net_worth: d.net_worth ?? 0, total_assets: d.total_assets ?? 0, total_debts: d.total_debts ?? 0 });
+      setRefreshedAt(d.refreshed_at ?? new Date().toISOString());
+    }
+    setRefreshing(false);
+  }
 
   // Emergency fund milestones — checked client-side once per mount (no plaid_accounts DB table)
   useEffect(() => {
@@ -531,6 +556,92 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
   const c = getAvatarColors(avatarColor);
   const initials = username ? username.slice(0, 2).toUpperCase() : "··";
 
+  // ─── Month-scoped metrics (mobile tiles + milestones) ─────────────────────
+
+  const monthMetrics = useMemo(() => {
+    const now = new Date();
+    const yr = now.getFullYear(), mo = now.getMonth();
+    const txns = transactions.filter(t => {
+      const d = new Date(t.date);
+      return d.getFullYear() === yr && d.getMonth() === mo;
+    });
+    const spent  = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const income = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    return {
+      spent,
+      income,
+      cashFlow:    transactions.length > 0 ? income - spent : null,
+      savingsRate: income > 0 ? ((income - spent) / income) * 100 : null,
+    };
+  }, [transactions]);
+
+  const sparklineData = useMemo(() => {
+    const now = new Date();
+    const yr = now.getFullYear(), mo = now.getMonth();
+    const map: Record<number, number> = {};
+    transactions.forEach(t => {
+      if (t.amount <= 0) return;
+      const d = new Date(t.date);
+      if (d.getFullYear() !== yr || d.getMonth() !== mo) return;
+      map[d.getDate()] = (map[d.getDate()] ?? 0) + t.amount;
+    });
+    return Array.from({ length: now.getDate() }, (_, i) => ({ value: map[i + 1] ?? 0 }));
+  }, [transactions]);
+
+  const monthlyActivityData = useMemo(() => {
+    const now = new Date();
+    const map: Record<string, number> = {};
+    transactions.filter(t => t.amount > 0).forEach(t => {
+      const d = new Date(t.date);
+      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+      map[key] = (map[key] ?? 0) + t.amount;
+    });
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, "0")}`;
+    const sorted = Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6);
+    if (sorted.length < 3) return [];
+    return sorted.map(([key, spend]) => {
+      const [yr, mo] = key.split("-");
+      return {
+        label: new Date(Number(yr), Number(mo), 1).toLocaleDateString("en-US", { month: "short" }),
+        spend,
+        isCurrent: key === currentKey,
+      };
+    });
+  }, [transactions]);
+
+  const investorTier = (() => {
+    const nw = netWorth?.net_worth ?? 0;
+    if (nw >= 250_000 && earnedKeys.has("stable"))              return "Multifamily";
+    if (nw >= 100_000 && earnedKeys.has("cash_flow_positive"))  return "Cash-Flow Investor";
+    if (nw >= 25_000  && earnedKeys.has("down_payment_funded")) return "House Hacker";
+    return "Saver";
+  })();
+
+  // ─── Mobile stat tile (inline — too small for a separate file) ────────────
+
+  function StatTile({ icon, value, label, color }: {
+    icon: React.ReactNode;
+    value: string;
+    label: string;
+    color: "accent" | "neutral" | "danger";
+  }) {
+    const valueClass =
+      color === "accent" ? "text-[var(--color-accent)]"      :
+      color === "danger" ? "text-[var(--color-danger)]"      :
+                           "text-[var(--color-text-primary)]";
+    const iconClass =
+      color === "accent" ? "text-[var(--color-accent)]" : "text-[var(--color-text-tertiary)]";
+    return (
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-xl)] p-3">
+        <div className={`mb-1.5 ${iconClass}`}>{icon}</div>
+        <p className={`font-[var(--font-display)] text-[22px] font-bold leading-none tabular-nums ${valueClass}`}>{value}</p>
+        <p className="text-[10px] text-[var(--color-text-tertiary)] mt-1">{label}</p>
+      </div>
+    );
+  }
+
   // ─── Card renderers ───────────────────────────────────────────────────────
 
   function renderNetWorth() {
@@ -547,6 +658,21 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
             : "—"
           }
         </p>
+        <div className="flex items-center justify-between mt-1">
+          {refreshedAt && (
+            <p className="text-[10px] text-(--color-text-tertiary)">
+              Updated {new Date(refreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="ml-auto flex items-center gap-1 text-[10px] text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={10} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
         <p className="text-[11px] font-[var(--font-mono)] text-[var(--color-text-secondary)] mt-2">
           Assets ${formatMoney(netWorth?.total_assets ?? 0)} · Debts ${formatMoney(netWorth?.total_debts ?? 0)}
         </p>
@@ -714,10 +840,293 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
         alignContent: "start",
       }}
     >
-      {/* ── Identity — locked, always row 1 ─────────────────────────────── */}
+      {/* ── Mobile context switcher — only rendered when teams prop is provided ── */}
+      {teams !== undefined && switchContext !== undefined && (
+        <div
+          style={{ gridColumn: "1 / -1" }}
+          className="bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-4 py-3 shadow-(--shadow-sm)"
+        >
+          <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--color-text-tertiary)] mb-2">Context</p>
+          <div className="space-y-0.5">
+            <button
+              onClick={() => switchContext({ type: "personal", id: activeContext.type === "personal" ? activeContext.id : "" })}
+              className={`w-full flex items-center justify-between h-9 transition-colors rounded-[var(--radius-md)] px-2 ${
+                activeContext.type === "personal"
+                  ? "text-[var(--color-accent)]"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              <div className="flex items-center gap-2 text-[13px]">
+                <span>Personal</span>
+              </div>
+              {activeContext.type === "personal" && (
+                <Check size={14} className="text-[var(--color-accent)] shrink-0" />
+              )}
+            </button>
+            {teams.map(team => (
+              <button
+                key={team.id}
+                onClick={() => switchContext({ type: "team", id: team.id })}
+                className={`w-full flex items-center justify-between h-9 transition-colors rounded-[var(--radius-md)] px-2 ${
+                  activeContext.type === "team" && activeContext.id === team.id
+                    ? "text-[var(--color-accent)]"
+                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                }`}
+              >
+                <span className="text-[13px]">{team.name}</span>
+                {activeContext.type === "team" && activeContext.id === team.id && (
+                  <Check size={14} className="text-[var(--color-accent)] shrink-0" />
+                )}
+              </button>
+            ))}
+            {onAddTeam && (
+              <button
+                onClick={onAddTeam}
+                className="w-full flex items-center gap-2 h-9 text-[13px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors px-2"
+              >
+                <Plus size={15} className="shrink-0" />
+                New team
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile layout — hidden at ≥1024px ────────────────────────────── */}
+      <div className="block lg:hidden" style={{ gridColumn: "1 / -1" }}>
+
+        {/* Compact profile header */}
+        <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+          <div className="relative shrink-0">
+            <div className={`w-11 h-11 rounded-full border overflow-hidden flex items-center justify-center ${c.bg} ${c.border}`}>
+              {avatarUrl
+                ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                : <span className={`${c.text} font-[var(--font-mono)] font-bold text-xs`}>{initials}</span>
+              }
+            </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[var(--color-elevated)] border border-[var(--color-border-default)] flex items-center justify-center hover:bg-[var(--color-border-subtle)] transition-colors"
+            >
+              <Camera size={9} className="text-[var(--color-text-secondary)]" />
+            </button>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {editingName ? (
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <input
+                  autoFocus
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false); }}
+                  className="bg-[var(--color-elevated)] border border-[var(--color-border-default)] rounded-[var(--radius-md)] px-2 py-1 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]/50 w-36"
+                />
+                <button onClick={saveName} disabled={nameSaving} className="text-[var(--color-success)] hover:opacity-80 disabled:opacity-40"><Check size={13} /></button>
+                <button onClick={() => setEditingName(false)} className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"><X size={12} /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="text-[15px] font-semibold text-[var(--color-text-primary)] truncate">{username || "—"}</p>
+                {earnedKeys.has("bank_connected") && (
+                  <CheckCircle2 size={13} className="text-[var(--color-accent)] shrink-0" />
+                )}
+              </div>
+            )}
+            <p className="text-[12px] text-[var(--color-text-tertiary)]">{investorTier}</p>
+          </div>
+
+          {!editingName && (
+            <button
+              onClick={() => { setNameInput(username); setEditingName(true); }}
+              className="shrink-0 h-9 px-3 text-[12px] text-[var(--color-text-secondary)] border border-[var(--color-border-default)] rounded-[var(--radius-md)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        {/* Hero net-worth card */}
+        <div
+          className="mx-4 mb-3 bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-xl)] p-4"
+          style={{ boxShadow: "var(--shadow-glow)" }}
+        >
+          <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2">Net Worth</p>
+          <p className={`font-[var(--font-display)] text-[32px] leading-none font-bold tabular-nums ${(netWorth?.net_worth ?? 0) >= 0 ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"}`}>
+            {netWorth
+              ? `${netWorth.net_worth < 0 ? "-" : ""}$${formatMoney(Math.abs(netWorth.net_worth))}`
+              : "—"
+            }
+          </p>
+          <div className="flex items-center justify-between mt-1">
+            {refreshedAt && (
+              <p className="text-[10px] text-(--color-text-tertiary)">
+                Updated {new Date(refreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="ml-auto flex items-center gap-1 text-[10px] text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={10} className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          {monthMetrics.cashFlow !== null && (
+            <span className={`inline-flex items-center gap-0.5 mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+              monthMetrics.cashFlow >= 0
+                ? "bg-[var(--color-success)]/15 text-[var(--color-success)]"
+                : "bg-[var(--color-danger)]/15 text-[var(--color-danger)]"
+            }`}>
+              {monthMetrics.cashFlow >= 0 ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+              ${formatMoney(Math.abs(monthMetrics.cashFlow))} this month
+            </span>
+          )}
+          {sparklineData.length > 1 && (
+            <div className="mt-3 h-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={sparklineData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="var(--color-accent)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="value" stroke="var(--color-accent)" strokeWidth={1.5} fill="url(#sparkGrad)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <p className="text-[11px] font-[var(--font-mono)] text-[var(--color-text-secondary)] mt-2 tabular-nums">
+            Assets ${formatMoney(netWorth?.total_assets ?? 0)} · Debts ${formatMoney(netWorth?.total_debts ?? 0)}
+          </p>
+        </div>
+
+        {/* 2×2 stat grid */}
+        <div className="grid grid-cols-2 gap-3 mx-4 mb-3">
+          <StatTile
+            icon={<TrendingUp size={14} />}
+            value={netWorth ? `${netWorth.net_worth < 0 ? "-" : ""}$${formatMoney(Math.abs(netWorth.net_worth))}` : "—"}
+            label="Net Worth"
+            color={(netWorth?.net_worth ?? 0) >= 0 ? "accent" : "danger"}
+          />
+          <StatTile
+            icon={<ShieldCheck size={14} />}
+            value={String(healthScore.total)}
+            label="Health Score"
+            color={healthScore.total >= 70 ? "accent" : "neutral"}
+          />
+          <StatTile
+            icon={<Wallet size={14} />}
+            value={monthMetrics.savingsRate !== null ? `${Math.round(monthMetrics.savingsRate)}%` : "—"}
+            label="Savings Rate"
+            color={monthMetrics.savingsRate !== null && monthMetrics.savingsRate >= 0 ? "accent" : "danger"}
+          />
+          <StatTile
+            icon={<Activity size={14} />}
+            value={monthMetrics.cashFlow !== null ? `${monthMetrics.cashFlow >= 0 ? "+" : "-"}$${formatMoney(Math.abs(monthMetrics.cashFlow))}` : "—"}
+            label="Cash Flow"
+            color={monthMetrics.cashFlow !== null ? (monthMetrics.cashFlow >= 0 ? "accent" : "danger") : "neutral"}
+          />
+        </div>
+
+        {/* Milestones ladder */}
+        <div className="mx-4 mb-3">
+          <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2">Milestones</p>
+          <MilestoneLadder
+            milestones={milestones}
+            netWorth={netWorth}
+            monthTotalIncome={monthMetrics.income}
+            monthTotalSpent={monthMetrics.spent}
+            goalOptions={goalOptions}
+            healthScore={healthScore.total}
+            dataReady={dataLoaded}
+          />
+        </div>
+
+        {/* Activity bar chart — only when ≥3 months of data */}
+        {monthlyActivityData.length >= 3 && (
+          <div className="mx-4 mb-3 bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-xl)] p-4">
+            <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-tertiary)] mb-3">Activity</p>
+            <div className="h-24">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyActivityData} margin={{ top: 0, right: 0, left: -28, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: "var(--color-text-tertiary)" }} axisLine={false} tickLine={false} />
+                  <Bar dataKey="spend" radius={[3, 3, 0, 0]}>
+                    {monthlyActivityData.map((entry, i) => (
+                      <Cell key={i} fill={entry.isCurrent ? "var(--color-accent)" : "var(--color-border-default)"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Banks grouped rows */}
+        {bankGroups.length > 0 && (
+          <div className="mx-4 mb-3 bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-xl)] overflow-hidden">
+            <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-tertiary)] px-4 pt-3 pb-2">Banks</p>
+            {bankGroups.map((group, gi) => (
+              <div
+                key={group.itemId}
+                className={`px-4 py-2.5 flex items-center justify-between ${gi < bankGroups.length - 1 ? "border-b border-[var(--color-border-subtle)]" : ""}`}
+              >
+                <p className="text-[13px] font-medium text-[var(--color-text-primary)]">{group.institutionName ?? "Bank"}</p>
+                <p className="text-[12px] font-[var(--font-mono)] tabular-nums text-[var(--color-text-tertiary)]">
+                  ${formatMoney(group.accounts.reduce((s, a) => s + a.current_balance, 0))}
+                </p>
+              </div>
+            ))}
+            <div className="px-4 py-2.5 border-t border-[var(--color-border-subtle)]">
+              <PlaidConnectButton onSuccess={fetchAll} />
+            </div>
+          </div>
+        )}
+
+        {/* Dreams grouped rows */}
+        {dreams.length > 0 && (
+          <div className="mx-4 mb-6 bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-xl)] overflow-hidden">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-tertiary)]">Dreams</p>
+              <button
+                onClick={() => setDreamModal({ mode: "add" })}
+                className="flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:opacity-80 transition-opacity font-medium"
+              >
+                <Plus size={11} /> Add
+              </button>
+            </div>
+            {dreams.map((dream, di) => (
+              <div
+                key={dream.id}
+                className={`flex items-center gap-3 px-4 py-2.5 ${di < dreams.length - 1 ? "border-b border-[var(--color-border-subtle)]" : ""}`}
+              >
+                <span className="text-lg shrink-0">{dream.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-[var(--color-text-primary)] truncate">{dream.title}</p>
+                  {dream.goal && (
+                    <p className="text-[10px] font-[var(--font-mono)] text-[var(--color-text-tertiary)] tabular-nums">
+                      {Math.round((dream.goal.current_balance / dream.goal.target_amount) * 100)}% saved
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setDreamModal({ mode: "edit", dream })}
+                  className="text-[var(--color-text-disabled)] hover:text-[var(--color-text-secondary)] p-1"
+                >
+                  <Edit2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Identity — desktop only ───────────────────────────────────────── */}
       <div
         style={{ gridColumn: "1 / -1" }}
-        className="bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-5 py-3 flex items-center flex-wrap gap-x-4 gap-y-3 shadow-(--shadow-sm)"
+        className="hidden lg:flex bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-5 py-3 items-center flex-wrap gap-x-4 gap-y-3 shadow-(--shadow-sm)"
       >
         <p className="text-[9px] uppercase tracking-widest text-(--color-text-tertiary) shrink-0">Identity</p>
         {/* Avatar 36px */}
@@ -780,14 +1189,14 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
           </select>
         </div>
 
-        {/* Morning report inline */}
+        {/* Weekly report inline */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-[11px] text-[var(--color-text-tertiary)]">Morning report</span>
+          <span className="text-[11px] text-[var(--color-text-tertiary)]">Weekly report</span>
           <button
-            onClick={() => patchProfile({ morning_report_enabled: !profileData?.morning_report_enabled })}
-            className={`relative w-8 h-4 rounded-full transition-colors ${profileData?.morning_report_enabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-border-default)]"}`}
+            onClick={() => patchProfile({ weekly_report_enabled: !profileData?.weekly_report_enabled })}
+            className={`relative w-8 h-4 rounded-full transition-colors ${profileData?.weekly_report_enabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-border-default)]"}`}
           >
-            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${profileData?.morning_report_enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${profileData?.weekly_report_enabled ? "translate-x-4" : "translate-x-0.5"}`} />
           </button>
         </div>
       </div>
@@ -796,17 +1205,17 @@ export default function ProfilePanel({ activeContext, onNavigate }: ProfilePanel
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={cardOrder} strategy={rectSortingStrategy}>
           {cardOrder.map(id => (
-            <SortableCard key={id} id={id} gridColumn={CARD_SPANS[id] ?? "auto"}>
+            <SortableCard key={id} id={id} gridColumn={CARD_SPANS[id] ?? "auto"} className="hidden lg:block">
               {cardRenderers[id]?.()}
             </SortableCard>
           ))}
         </SortableContext>
       </DndContext>
 
-      {/* ── Milestones — locked, always last row ─────────────────────────── */}
+      {/* ── Milestones — desktop only ────────────────────────────────────── */}
       <div
         style={{ gridColumn: "1 / -1" }}
-        className="bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-4 py-3 shadow-[var(--shadow-sm)]"
+        className="hidden lg:block bg-[var(--color-surface)] border border-[var(--color-border-default)] rounded-[var(--radius-lg)] px-4 py-3 shadow-[var(--shadow-sm)]"
       >
         <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--color-text-tertiary)] mb-3">Milestones</p>
         <div className="flex gap-4 overflow-x-auto pb-1">

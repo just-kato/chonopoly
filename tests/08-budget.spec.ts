@@ -62,10 +62,11 @@ test.describe("Budget page — no bank connected", () => {
     await expect(page.getByRole("button", { name: /connect bank/i })).toHaveCount(2);
   });
 
-  test("back arrow navigates to home", async ({ page }) => {
-    await page.getByRole("link", { name: /arrow/i }).first().click();
-    await expect(page).toHaveURL("http://localhost:3000/");
-  });
+  // RETIRED — owner decision 2026-07-09: /finances is the app's root route (/ redirects to
+  // /finances), so there is no "up." The back arrow (<Link href="/course">) was removed from
+  // BudgetClient to avoid misrepresenting the routing structure. This test correctly caught
+  // an unreviewed routing change before retirement.
+  test.skip("back arrow navigates to home", async () => {});
 });
 
 test.describe("Budget page — bank connected", () => {
@@ -96,7 +97,7 @@ test.describe("Budget page — bank connected", () => {
 
   test("shows spending breakdown categories", async ({ page }) => {
     await page.getByRole("button", { name: /transactions/i }).click();
-    await expect(page.getByText("Food & Drink", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Food & Drink", exact: true })).toBeVisible();
     await expect(page.getByText("Transportation", { exact: true })).toBeVisible();
     await expect(page.getByText("Entertainment", { exact: true })).toBeVisible();
   });
@@ -120,7 +121,7 @@ test.describe("Budget link in profile dropdown", () => {
   test.beforeEach(async ({ page }) => {
     if (!process.env.TEST_EMAIL) test.skip();
     await stubDataEndpoints(page);
-    await page.goto("/");
+    await page.goto("/course");
   });
 
   test("Budget link appears in profile dropdown", async ({ page }) => {

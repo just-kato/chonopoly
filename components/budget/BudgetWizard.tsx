@@ -77,10 +77,11 @@ function computePeriodBounds(periodType: "daily" | "weekly" | "monthly" | "quart
     case "daily":
       return { period_start: toISO(now), period_end: toISO(now) };
     case "weekly": {
-      const dow = (now.getDay() + 6) % 7;
-      const monday = new Date(now); monday.setDate(now.getDate() - dow);
-      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-      return { period_start: toISO(monday), period_end: toISO(sunday) };
+      // Sun–Sat weeks: back up to the most recent Sunday, end on Saturday.
+      const dow = now.getDay(); // 0 = Sunday
+      const sunday = new Date(now); sunday.setDate(now.getDate() - dow);
+      const saturday = new Date(sunday); saturday.setDate(sunday.getDate() + 6);
+      return { period_start: toISO(sunday), period_end: toISO(saturday) };
     }
     case "quarterly": {
       const q = Math.floor(now.getMonth() / 3);
@@ -139,6 +140,7 @@ export default function BudgetWizard({
 
   // Step 4
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Discard overlay
   const [showDiscard, setShowDiscard] = useState(false);
@@ -200,9 +202,10 @@ export default function BudgetWizard({
     const limit = parseFloat(totalLimit);
     if (isNaN(limit) || limit <= 0) return;
     setSaving(true);
+    setSaveError(null);
 
     if (editingBudget) {
-      await fetch("/api/budget/update", {
+      const res = await fetch("/api/budget/update", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -214,10 +217,16 @@ export default function BudgetWizard({
           ...(selectedGoalId ? { goal_id: selectedGoalId } : {}),
         }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSaveError((body as { error?: string }).error ?? "Failed to save budget.");
+        setSaving(false);
+        return;
+      }
     } else {
       if (!selectedCategoryId) { setSaving(false); return; }
       const { period_start, period_end } = computePeriodBounds(selectedPeriodType);
-      await fetch("/api/budget/create", {
+      const res = await fetch("/api/budget/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -232,6 +241,12 @@ export default function BudgetWizard({
           recurring: true,
         }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSaveError((body as { error?: string }).error ?? "Failed to create budget.");
+        setSaving(false);
+        return;
+      }
     }
 
     onCreated();
@@ -405,13 +420,6 @@ export default function BudgetWizard({
                   Next →
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => { setSelectedGoalId(null); advance(3, "forward"); }}
-                className="text-xs text-center text-[#55534e] hover:text-[#7a7870] transition-colors py-1"
-              >
-                Skip — no goal
-              </button>
             </div>
           </div>
         );
@@ -601,7 +609,7 @@ export default function BudgetWizard({
 
             <div className="flex gap-3">
               <button
-                onClick={() => advance(3, "back")}
+                onClick={() => { setSaveError(null); advance(3, "back"); }}
                 className="flex-1 py-2.5 text-sm text-[#7a7870] border border-[#2e2e38] rounded-xl hover:text-white transition-colors"
               >
                 ← Back
@@ -616,6 +624,9 @@ export default function BudgetWizard({
                   : editingBudget ? "Save changes" : "Create budget"}
               </button>
             </div>
+            {saveError && (
+              <p className="text-[12px] text-red-400 text-center mt-1">{saveError}</p>
+            )}
           </div>
         );
       }

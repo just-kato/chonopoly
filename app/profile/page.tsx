@@ -50,7 +50,7 @@ function ProfileContent() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
-  const [profile, setProfile] = useState<Profile>({ username: null, last_chapter_id: null, last_tab_slug: null, role: "user", avatar_url: null, avatar_color: "amber", onboarding_complete: false, pay_cycle_start_day: 1, morning_report_enabled: true, health_score_last_calculated: null });
+  const [profile, setProfile] = useState<Profile>({ username: null, last_chapter_id: null, last_tab_slug: null, role: "user", avatar_url: null, avatar_color: "amber", onboarding_complete: false, pay_cycle_start_day: 1, weekly_report_enabled: true, health_score_last_calculated: null });
   const [progress, setProgress] = useState<AllProgress>({});
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarColor, setAvatarColor] = useState("amber");
@@ -159,9 +159,9 @@ function ProfileContent() {
   return (
     <div className="min-h-screen bg-[#0f0f11] text-[#e8e6df]">
       <div className="bg-[#18181c] border-b border-[#2e2e38] px-6 py-4">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-[#7a7870] hover:text-amber-400 text-sm transition-colors">
+        <Link href="/finances" className="inline-flex items-center gap-1.5 text-[#7a7870] hover:text-amber-400 text-sm transition-colors">
           <ArrowLeft size={14} />
-          Back to Study Guide
+          Back to Finances
         </Link>
       </div>
 

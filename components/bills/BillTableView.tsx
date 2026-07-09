@@ -5,22 +5,10 @@ import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { formatMoney } from "@/components/budget/types";
 import { StatCard } from "@/components/budget/StatCard";
 import type { Bill } from "@/components/bills/BillsWidget";
+import { isPaidThisCycle } from "@/lib/budget/verdict";
+import { isOverdueBill } from "@/lib/bills/cycle";
 
-// ─── Helpers (duplicated from BillsPanel to keep self-contained) ──────────────
-
-function isPaidThisCycle(bill: Bill): boolean {
-  if (!bill.last_paid_at) return false;
-  const paid = new Date(bill.last_paid_at);
-  const today = new Date();
-  if (bill.recurrence === "monthly")
-    return paid.getFullYear() === today.getFullYear() && paid.getMonth() === today.getMonth();
-  if (bill.recurrence === "weekly")
-    return (today.getTime() - paid.getTime()) / 86400000 < 7;
-  if (bill.recurrence === "yearly")
-    return paid.getFullYear() === today.getFullYear();
-  return !!bill.last_paid_at;
-}
-
+// getDaysUntil: only used for Next Bill stat (next_due_date from API is always ≥ today)
 function getDaysUntil(nextDueDate: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -189,10 +177,11 @@ export default function BillTableView({ onEdit }: Props) {
     <p className="text-sm text-(--color-text-tertiary) py-10 text-center">No bills yet.</p>
   );
 
-  const totalDueMonth = bills.filter(b => !isPaidThisCycle(b) && getDaysUntil(b.next_due_date) >= 0).reduce((s, b) => s + b.amount, 0);
-  const totalOverdue = bills.filter(b => !isPaidThisCycle(b) && getDaysUntil(b.next_due_date) < 0).reduce((s, b) => s + b.amount, 0);
+  const today = new Date();
+  const totalDueMonth = bills.filter(b => !isPaidThisCycle(b) && !isOverdueBill(b, today)).reduce((s, b) => s + b.amount, 0);
+  const totalOverdue = bills.filter(b => !isPaidThisCycle(b) && isOverdueBill(b, today)).reduce((s, b) => s + b.amount, 0);
   const paidMonth = bills.filter(b => isPaidThisCycle(b)).reduce((s, b) => s + b.amount, 0);
-  const upcoming = bills.filter(b => !isPaidThisCycle(b)).sort((a, b) => getDaysUntil(a.next_due_date) - getDaysUntil(b.next_due_date)).find(b => getDaysUntil(b.next_due_date) >= 0);
+  const upcoming = bills.filter(b => !isPaidThisCycle(b) && !isOverdueBill(b, today)).sort((a, b) => getDaysUntil(a.next_due_date) - getDaysUntil(b.next_due_date))[0] ?? null;
   const nextInDays = upcoming ? getDaysUntil(upcoming.next_due_date) : null;
   const nextBillVariant = nextInDays === null ? "muted" as const : nextInDays <= 0 ? "danger" as const : nextInDays <= 3 ? "warning" as const : "default" as const;
 
@@ -218,8 +207,7 @@ export default function BillTableView({ onEdit }: Props) {
       <tbody>
         {bills.map(b => {
           const paid = isPaidThisCycle(b);
-          const daysUntil = getDaysUntil(b.next_due_date);
-          const isOverdue = daysUntil < 0 && !paid;
+          const isOverdue = isOverdueBill(b, today) && !paid;
           const color = avatarColor(b.name);
 
           return (

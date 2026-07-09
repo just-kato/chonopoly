@@ -65,7 +65,7 @@ function ResetPasswordContent() {
       setSubmitError(error.message);
     } else {
       setStatus("success");
-      setTimeout(() => router.replace("/"), 2000);
+      setTimeout(() => router.replace("/finances"), 2000);
     }
   }
 

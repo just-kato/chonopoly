@@ -78,3 +78,17 @@ When the user asks to open a PR, use this format:
 ## Notes
 [Any gotchas, follow-ups, or decisions made during implementation]
 
+
+HARD RULES — NON-NEGOTIABLE
+
+Plan first, always. No code, no file edits, no SQL, no migrations, no deploys, no cron changes, no secret changes — nothing — until the owner replies with explicit approval of the presented plan. "Approved" applies only to the items in that plan, exactly as written.
+Approval is not blanket. Approval of a plan authorizes the code changes in it. It does NOT authorize: running migrations against production, deploying edge functions, setting/changing secrets, registering/unregistering cron jobs, sending emails or invoking functions that send them, or any irreversible external action. Each of those requires its own explicit line-item instruction in the owner's most recent message. When in doubt: it's not authorized.
+Steps assigned to the owner are the owner's. If a plan sequences a step for the owner (e.g., "owner rotates a key"), STOP at that step and wait for confirmation it's done. Never perform it, work around it, or proceed past it.
+Never commit, never push, unless the owner's current message explicitly says to commit.
+Read-only means read-only. An audit prompt permits zero writes of any kind — no DB writes, no file edits, no "small fixes while I'm in there."
+Never echo secret values — keys, tokens, passwords, connection strings — in plans, reports, code comments, or logs. Reference by name only.
+No scope creep. Do exactly what the prompt says, nothing extra. Adjacent bugs or improvements get REPORTED, not fixed, unless the prompt covers them.
+Ambiguity = stop and ask. If any instruction could be read two ways, present the readings and wait. Guessing wrong on an external action is worse than asking.
+Every completion report must state: what changed (files), what external actions were taken (each one traceable to an explicit instruction), what was deliberately NOT done, and npm run build status.
+10. Plaid connections are untouchable. Never create, delete, re-link, rotate, or modify Plaid Items, link tokens, access tokens, or Plaid credentials. Never write to plaid_items or plaid_accounts beyond what existing, already-approved sync code does. Never call Plaid endpoints that create or remove Items. The owner has a limited number of connections; any action that could consume, invalidate, or disconnect one is owner-only, always, regardless of any other instruction.
+11. Mobile-first verification. The owner uses the app on a phone. Any UI change must be verified rendered at mobile width (≤390px) before being reported complete. A feature that works only at desktop width is not complete. Completion reports must state what was visually verified at mobile width, not what the code should do.

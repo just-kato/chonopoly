@@ -16,7 +16,7 @@ export async function GET() {
 
   const { data } = await db()
     .from("profiles")
-    .select("onboarding_complete, pay_cycle_start_day, morning_report_enabled, dashboard_layout")
+    .select("onboarding_complete, pay_cycle_start_day, weekly_report_enabled, dashboard_layout")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -24,7 +24,7 @@ export async function GET() {
     email: user.email ?? null,
     onboarding_complete: data?.onboarding_complete ?? false,
     pay_cycle_start_day: data?.pay_cycle_start_day ?? 1,
-    morning_report_enabled: data?.morning_report_enabled ?? true,
+    weekly_report_enabled: data?.weekly_report_enabled ?? true,
     dashboard_layout: data?.dashboard_layout ?? null,
   });
 }
@@ -35,7 +35,7 @@ export async function PATCH(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json() as Record<string, unknown>;
-  const allowed = ["pay_cycle_start_day", "morning_report_enabled", "onboarding_complete", "dashboard_layout"];
+  const allowed = ["pay_cycle_start_day", "weekly_report_enabled", "onboarding_complete", "dashboard_layout"];
   const patch: Record<string, unknown> = { id: user.id, updated_at: new Date().toISOString() };
   for (const key of allowed) {
     if (body[key] !== undefined) patch[key] = body[key];

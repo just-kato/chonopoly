@@ -54,16 +54,21 @@ function nextPeriodBounds(periodType: string, currentEnd: string): { start: stri
   }
 }
 
+// Safety cap: maximum periods to advance per budget in one invoke.
+// Prevents infinite loops on corrupt period_type or runaway catch-up.
+const CATCH_UP_LIMIT = 24;
+
 Deno.serve(async () => {
   const today = new Date().toISOString().split("T")[0];
 
-  // ── 1. Active recurring budgets whose period ends today ───────────────────
+  // ── 1. Active recurring budgets whose period has already ended ────────────
+  // Fixed: .lt (not .eq) so budgets frozen mid-week by a missed cron are caught.
   const { data: budgets, error: budgetsErr } = await db
     .from("budgets")
     .select("id, goal_id, owner_id, owner_type, category_id, period_type, period_end, total_limit, rollover_enabled")
     .eq("status", "active")
     .eq("recurring", true)
-    .eq("period_end", today);
+    .lt("period_end", today);
 
   if (budgetsErr) {
     console.error("[nightly-budget-reset] failed to fetch budgets:", budgetsErr.message);
@@ -97,32 +102,48 @@ Deno.serve(async () => {
   const goalMap = new Map((goalRows ?? []).map(g => [g.id, g]));
 
   // ── 4. Create new budget periods and mark old ones paused ─────────────────
-  const newBudgetInserts = [];
+  const newBudgetInserts: Array<Record<string, unknown>> = [];
   const nudgeWork: Array<{ owner_id: string; goal_name: string; unspent: number }> = [];
 
   for (const budget of budgets) {
-    const snapshot   = snapshotMap.get(budget.id);
-    const remaining  = snapshot ? Number(snapshot.remaining_after) : Number(budget.total_limit);
+    const snapshot  = snapshotMap.get(budget.id);
+    const remaining = snapshot ? Number(snapshot.remaining_after) : Number(budget.total_limit);
     const totalLimit = Number(budget.total_limit);
 
+    // Rollover applied only to the first new period; catch-up steps use full limit.
     const rolloverAmount = budget.rollover_enabled && remaining > 0 ? remaining : 0;
-    const nextLimit      = totalLimit + rolloverAmount;
 
-    const { start: periodStart, end: periodEnd } = nextPeriodBounds(budget.period_type, budget.period_end);
+    let currentEnd = budget.period_end;
+    let step = 0;
 
-    newBudgetInserts.push({
-      goal_id:          budget.goal_id,
-      owner_type:       budget.owner_type,
-      owner_id:         budget.owner_id,
-      category_id:      budget.category_id,
-      period_type:      budget.period_type,
-      period_start:     periodStart,
-      period_end:       periodEnd,
-      total_limit:      Math.round(nextLimit * 100) / 100,
-      recurring:        true,
-      rollover_enabled: budget.rollover_enabled,
-      status:           "active",
-    });
+    // Catch-up loop: advance through all missed periods until we reach or pass today.
+    while (currentEnd < today && step < CATCH_UP_LIMIT) {
+      const { start: periodStart, end: periodEnd } = nextPeriodBounds(budget.period_type, currentEnd);
+      const stepLimit = step === 0
+        ? Math.round((totalLimit + rolloverAmount) * 100) / 100
+        : totalLimit;
+
+      newBudgetInserts.push({
+        goal_id:          budget.goal_id,
+        owner_type:       budget.owner_type,
+        owner_id:         budget.owner_id,
+        category_id:      budget.category_id,
+        period_type:      budget.period_type,
+        period_start:     periodStart,
+        period_end:       periodEnd,
+        total_limit:      stepLimit,
+        recurring:        true,
+        rollover_enabled: budget.rollover_enabled,
+        status:           "active",
+      });
+
+      currentEnd = periodEnd;
+      step++;
+    }
+
+    if (step >= CATCH_UP_LIMIT) {
+      console.warn(`[nightly-budget-reset] catch-up limit hit for budget ${budget.id} — investigate period_type`);
+    }
 
     // Queue nudge email if: no rollover, money left over, parent goal is savings type
     const goal = goalMap.get(budget.goal_id);
@@ -135,14 +156,19 @@ Deno.serve(async () => {
     }
   }
 
-  // Batch-insert new budget periods
-  const { error: insertErr } = await db.from("budgets").insert(newBudgetInserts);
+  // Batch-upsert new budget periods.
+  // ON CONFLICT DO NOTHING (ignoreDuplicates) makes re-invokes safe against
+  // the budgets_unique_period index (goal_id, owner_id, owner_type, category_id, period_type, period_start).
+  const { error: insertErr } = await db.from("budgets").upsert(newBudgetInserts, {
+    onConflict: "goal_id,owner_id,owner_type,category_id,period_type,period_start",
+    ignoreDuplicates: true,
+  });
   if (insertErr) {
-    console.error("[nightly-budget-reset] insert failed:", insertErr.message);
+    console.error("[nightly-budget-reset] upsert failed:", insertErr.message);
     return new Response(JSON.stringify({ error: insertErr.message }), { status: 500 });
   }
 
-  // Batch-pause old budgets
+  // Batch-pause old budgets (unchanged — idempotent as-is)
   const { error: pauseErr } = await db
     .from("budgets")
     .update({ status: "paused" })
@@ -153,8 +179,6 @@ Deno.serve(async () => {
   }
 
   // ── 5. Savings nudge emails ───────────────────────────────────────────────
-  // Look up recipient email from auth.users via the goal's owner_id before
-  // calling Resend. The cron runs as service role so auth.users is accessible.
   let nudgesSent = 0;
 
   if (RESEND_API_KEY) {

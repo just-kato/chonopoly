@@ -22,6 +22,7 @@ export interface Transaction {
   date: string;
   personal_finance_category: { primary: string; detailed: string } | null;
   logo_url: string | null;
+  category_override: string | null;
 }
 
 export type ViewState =
@@ -34,6 +35,7 @@ export type ViewState =
   | "transactions"
   | "analytics"
   | "profile"
+  | "team-settings"
   | { type: "account"; accountId: string };
 
 export const CATEGORY_META: Record<string, { label: string; color: string; hex: string; icon: string }> = {
@@ -54,6 +56,31 @@ export const CATEGORY_META: Record<string, { label: string; color: string; hex: 
   BANK_FEES:            { label: "Bank Fees",       color: "bg-zinc-500/15 text-zinc-400",      hex: "#a1a1aa", icon: "Building2" },
   OTHER:                { label: "Other",           color: "bg-zinc-500/15 text-zinc-400",      hex: "#71717a", icon: "CircleDot" },
 };
+
+export interface BudgetSummaryRow {
+  budget_id: string;
+  goal_id: string;
+  name: string | null;
+  category_name: string;
+  category_color: string;
+  category_icon: string;
+  total_limit: number;
+  effective_limit: number;
+  amount_spent: number;
+  amount_remaining: number;
+  percent_used: number;
+  over_budget: boolean;
+  period_type: string;
+  period_start: string;
+  period_end: string;
+  days_remaining: number;
+  daily_rate: number;
+  transaction_count: number;
+  notified_80: boolean;
+  notified_over: boolean;
+  nudge_sent: boolean;
+  status: "active" | "paused";
+}
 
 export function getCategoryMeta(primary: string | undefined) {
   return CATEGORY_META[primary ?? "OTHER"] ?? CATEGORY_META.OTHER;

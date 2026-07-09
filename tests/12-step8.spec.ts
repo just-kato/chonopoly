@@ -48,8 +48,18 @@ async function goToGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
   await page.route("**/api/goals/summary**", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [MOCK_GOAL] }) })
   );
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
+  await page.route("**/api/bills**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
+  );
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("Emergency Fund").filter({ visible: true })).toBeVisible();
 }
@@ -59,8 +69,18 @@ async function goToEmptyGoals(page: Parameters<typeof stubDataEndpoints>[0]) {
   await page.route("**/api/goals/summary**", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ goals: [] }) })
   );
+  await page.route("**/api/budget/summary**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summaries: [] }) })
+  );
+  await page.route("**/api/net-worth**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ net_worth: null }) })
+  );
+  await page.route("**/api/bills**", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ bills: [] }) })
+  );
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 }
@@ -115,6 +135,7 @@ test("clicking a team context option activates it and shows banner", async ({ pa
   );
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 
@@ -141,6 +162,7 @@ test("goals summary API is called with context_type and context_id params", asyn
 
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 
@@ -200,6 +222,7 @@ test("goals API 403 silently resets active context to personal", async ({ page }
 
   await page.goto("/finances");
   await page.getByRole("button", { name: /manage/i }).click();
+  await page.getByTestId("manage-all-btn").click();
   await page.getByRole("button", { name: /goals/i }).click();
   await expect(page.getByText("No savings goals yet")).toBeVisible();
 
@@ -295,8 +318,8 @@ test("wizard back button returns to previous step", async ({ page }) => {
   await page.getByRole("button", { name: /next/i }).click();
   await expect(page.getByText("What's your target?")).toBeVisible();
 
-  // Go back to step 1
-  await page.getByRole("button", { name: /back/i }).click();
+  // Go back to step 1 — scope to wizard to avoid matching ManagePanel's Back button
+  await page.getByTestId("goal-wizard").getByRole("button", { name: /back/i }).click();
   await expect(page.getByPlaceholder(/emergency fund/i)).toBeVisible();
   await expect(page.locator("input[placeholder*='Emergency fund']")).toHaveValue("Test Goal");
 });

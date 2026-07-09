@@ -86,7 +86,7 @@ test("bills summary bar shows totals", async ({ page }) => {
   await goToBills(page);
 
   // Summary stat cards are visible
-  await expect(page.getByText("Due this month").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("Due This Month", { exact: true }).filter({ visible: true })).toBeVisible();
   await expect(page.getByText("Overdue").filter({ visible: true })).toBeVisible();
   await expect(page.getByText("Paid this cycle")).toBeVisible();
   await expect(page.getByText("Next bill").filter({ visible: true })).toBeVisible();

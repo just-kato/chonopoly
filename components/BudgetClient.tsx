@@ -7,7 +7,7 @@ import { usePlaidLink } from "react-plaid-link";
 import Link from "next/link";
 import {
   LayoutDashboard, LayoutGrid, PieChart, Plus, RefreshCw, Trash2,
-  ChevronDown, ChevronRight, ChevronLeft, Search, ArrowLeft, Wallet,
+  ChevronDown, ChevronRight, ChevronLeft, Search, Wallet,
   ShoppingBag, Plane, UtensilsCrossed, Car, House, HeartPulse,
   Sparkles, Zap, Wrench, TrendingUp, Banknote, Building2, Film,
   CircleDot, ArrowDownLeft, ArrowUpRight, Pencil, Mail, Pause, Play, Target, User, Check, Users, RotateCcw, CreditCard, Settings2, CalendarClock, MoreHorizontal, Receipt, type LucideIcon,
@@ -2073,9 +2073,8 @@ export default function BudgetClient({ initialConnected, userId }: { initialConn
           backgroundSize: "200px 200px",
         }}
       >
-        {/* Back + label */}
-        <div className="px-4 pt-5 pb-3 flex items-center gap-2 border-b border-(--color-border-subtle)">
-          <Link href="/course" aria-label="Arrow back" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"><ArrowLeft size={14} /></Link>
+        {/* Section label — /finances is the root route, no back arrow */}
+        <div className="px-4 pt-5 pb-3 border-b border-(--color-border-subtle)">
           <span className="text-[10px] text-(--color-text-disabled) uppercase tracking-[0.1em] font-medium">Finances</span>
         </div>
 

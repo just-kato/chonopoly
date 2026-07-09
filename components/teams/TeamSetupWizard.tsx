@@ -554,7 +554,7 @@ export default function TeamSetupWizard({ onComplete, onClose, userId }: TeamSet
               );
             })}
           </div>
-          <button onClick={onClose} className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
+          <button onClick={onClose} aria-label="Close" className="text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
             <X size={18} />
           </button>
         </div>

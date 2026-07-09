@@ -159,7 +159,8 @@ test.describe("Manage tab — StatusPage", () => {
   });
 
   test("verdict banner shows ok when no issues", async ({ page }) => {
-    await stubStatusPage(page, { budgets: [MOCK_BUDGET_ONTRACK], bills: [] });
+    // amount_spent 0 so spend fraction (0%) never exceeds elapsed fraction at any point in the month
+    await stubStatusPage(page, { budgets: [{ ...MOCK_BUDGET_ONTRACK, amount_spent: 0, amount_remaining: 500, percent_used: 0 }], bills: [] });
     await page.goto("/finances?tab=manage");
 
     await expect(page.getByTestId("verdict-banner")).toContainText("On track");

@@ -63,7 +63,7 @@ test.describe("Context switcher", () => {
     await page.goto("/finances");
 
     await expect(page.getByTestId(`context-team-${MOCK_TEAM.id}`)).toBeVisible();
-    await expect(page.getByText(MOCK_TEAM.name)).toBeVisible();
+    await expect(page.getByTestId(`context-team-${MOCK_TEAM.id}`)).toContainText(MOCK_TEAM.name);
   });
 
   test("switching to team context shows team banner and settings link", async ({ page }) => {
@@ -144,16 +144,16 @@ test.describe("Team setup wizard", () => {
     await page.getByRole("button", { name: /next/i }).first().click();
 
     // Step 2 — invite (skip)
-    await expect(page.getByText(/invite members/i)).toBeVisible();
-    await page.getByRole("button", { name: /skip/i }).click();
+    await expect(page.getByText(/who's on this team/i)).toBeVisible();
+    await page.getByRole("button", { name: /skip/i }).first().click();
 
-    // Step 3 — accounts (skip)
-    await expect(page.getByText(/share bank accounts/i)).toBeVisible();
-    await page.getByRole("button", { name: /skip/i }).click();
+    // Step 3 — share goals (skip)
+    await expect(page.getByText(/share your goals with the team/i)).toBeVisible();
+    await page.getByRole("button", { name: /skip/i }).first().click();
 
-    // Step 4 — review
-    await expect(page.getByText(/review/i)).toBeVisible();
-    await page.getByRole("button", { name: /create team/i }).click();
+    // Step 4 — connect finances (skip)
+    await expect(page.getByText(/connect team finances/i)).toBeVisible();
+    await page.getByRole("button", { name: /skip/i }).first().click();
 
     // Step 5 — done
     await expect(page.getByText(/park properties/i).first()).toBeVisible();
@@ -230,8 +230,8 @@ test.describe("Team settings panel", () => {
     await page.getByTestId(`context-team-${MOCK_TEAM.id}`).click();
     await page.getByText("Team settings").click();
 
-    await expect(page.getByRole("button", { name: /leave team/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /delete team/i })).toBeVisible();
+    await expect(page.getByText("Leave team")).toBeVisible();
+    await expect(page.getByText("Delete team")).toBeVisible();
   });
 });
 
@@ -270,8 +270,8 @@ test.describe("Invite accept page (/invite/[token])", () => {
 
     await page.goto("/invite/bad-token");
 
-    // Should show some kind of error/not-found message
-    await expect(page.getByText(/expired|invalid|not found/i)).toBeVisible();
+    // Should show the specific error message in the error paragraph
+    await expect(page.getByText("Invite has expired")).toBeVisible();
   });
 
   test("shows not-found state for unknown token", async ({ page }) => {
@@ -281,6 +281,6 @@ test.describe("Invite accept page (/invite/[token])", () => {
 
     await page.goto("/invite/unknown-token");
 
-    await expect(page.getByText(/not found|invalid/i)).toBeVisible();
+    await expect(page.getByText(/not found|invalid/i).first()).toBeVisible();
   });
 });

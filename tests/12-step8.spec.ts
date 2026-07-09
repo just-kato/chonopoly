@@ -318,8 +318,8 @@ test("wizard back button returns to previous step", async ({ page }) => {
   await page.getByRole("button", { name: /next/i }).click();
   await expect(page.getByText("What's your target?")).toBeVisible();
 
-  // Go back to step 1
-  await page.getByRole("button", { name: /back/i }).click();
+  // Go back to step 1 — scope to wizard to avoid matching ManagePanel's Back button
+  await page.getByTestId("goal-wizard").getByRole("button", { name: /back/i }).click();
   await expect(page.getByPlaceholder(/emergency fund/i)).toBeVisible();
   await expect(page.locator("input[placeholder*='Emergency fund']")).toHaveValue("Test Goal");
 });
